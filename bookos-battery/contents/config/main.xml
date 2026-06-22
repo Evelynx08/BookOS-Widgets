@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <!-- Icono panel -->
+    <entry name="iconTheme"           type="Int">    <default>0</default>   </entry>
+    <entry name="iconWidth"           type="Int">    <default>23</default>  </entry>
+    <entry name="iconHeight"          type="Int">    <default>11</default>  </entry>
+    <entry name="percentPosition"     type="Int">    <default>0</default>   </entry>
+    <!-- Icono visual preset -->
+    <entry name="iconPreset"          type="Int">    <default>1</default>   </entry>
+    <entry name="useCustomIconRadius" type="Bool">   <default>false</default></entry>
+    <entry name="customIconRadius"    type="Int">    <default>10</default>  </entry>
+    <entry name="iconRadiusRatio"     type="Double"> <default>0.30</default></entry>
+    <entry name="boltScale"           type="Double"> <default>1.5</default> </entry>
+    <entry name="boltStyle"           type="Int">    <default>1</default>   </entry>
+    <!-- Popup -->
+    <entry name="popupWidth"          type="Int">    <default>340</default> </entry>
+    <entry name="popupHeight"         type="Int">    <default>0</default>   </entry>
+    <entry name="popupStyle"          type="Int">    <default>0</default>   </entry>
+    <entry name="popupBgColorOverride" type="String"><default></default>    </entry>
+    <!-- Energía -->
+    <entry name="forceManager"        type="Int">    <default>0</default>   </entry>
+    <!-- Tipografía -->
+    <entry name="customFont"          type="String"> <default></default>    </entry>
+    <!-- Animaciones -->
+    <entry name="animFill"            type="Bool">   <default>true</default>  </entry>
+    <entry name="animShimmer"         type="Bool">   <default>true</default>  </entry>
+    <entry name="animShimmerSpeed"    type="Int">    <default>2400</default>  </entry>
+    <entry name="animPulse"           type="Bool">   <default>true</default>  </entry>
+    <entry name="animPopupEntrance"   type="Bool">   <default>true</default>  </entry>
+    <entry name="animProfileSpring"   type="Bool">   <default>true</default>  </entry>
+    <entry name="animRainbow"         type="Bool">   <default>false</default> </entry>
+    <entry name="animRainbowSpeed"    type="Int">    <default>3000</default>  </entry>
+    <entry name="animBounce"          type="Bool">   <default>false</default> </entry>
+    <!-- Visual preset completo -->
+    <entry name="visualPreset"        type="Int">    <default>1</default>     </entry>
+    <!-- Colores de estado -->
+    <entry name="chargingColor"       type="String"> <default>#30D158</default> </entry>
+    <entry name="pluggedFullColor"    type="String"> <default>#30D158</default> </entry>
+    <entry name="criticalColor"       type="String"> <default>#FF453A</default> </entry>
+    <entry name="lowColor"            type="String"> <default>#FFD60A</default> </entry>
+    <entry name="normalColor"         type="String"> <default></default>        </entry>
+    <entry name="powerSaveColor"      type="String"> <default>#FFD60A</default> </entry>
+    <entry name="balancedColor"       type="String"> <default>#0A84FF</default>        </entry>
+    <entry name="performanceColor"    type="String"> <default>#0A84FF</default> </entry>
+    <!-- Notificaciones -->
+    <entry name="enableNotifications" type="Bool">   <default>true</default>    </entry>
+    <entry name="notifyCharging"      type="Bool">   <default>true</default>    </entry>
+    <entry name="notifyDischarging"   type="Bool">   <default>true</default>    </entry>
+    <entry name="notifyLow"           type="Bool">   <default>true</default>    </entry>
+    <entry name="notifyFull"          type="Bool">   <default>true</default>    </entry>
+    <entry name="notifyLowThreshold"  type="Int">    <default>20</default>      </entry>
+    <entry name="notifyCritThreshold" type="Int">    <default>10</default>      </entry>
+    <!-- Perfiles -->
+    <entry name="profile1Label"       type="String"> <default>Ahorro</default>                  </entry>
+    <entry name="profile1Desc"        type="String"> <default>Máx. duración de batería</default> </entry>
+    <entry name="profile1Cmd"         type="String"> <default></default>                         </entry>
+    <entry name="profile2Label"       type="String"> <default>Equilibrado</default>              </entry>
+    <entry name="profile2Desc"        type="String"> <default>Rendimiento recomendado</default>  </entry>
+    <entry name="profile2Cmd"         type="String"> <default></default>                         </entry>
+    <entry name="profile3Label"       type="String"> <default>Alto rendimiento</default>         </entry>
+    <entry name="profile3Desc"        type="String"> <default>Máx. potencia del sistema</default></entry>
+    <entry name="profile3Cmd"         type="String"> <default></default>                         </entry>
+  </group>
+</kcfg>

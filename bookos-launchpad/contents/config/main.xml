@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+
+  <kcfgfile name=""/>
+
+  <group name="General">
+
+    <!-- Grid auto-sizes to screen. Icon size index: 0=small … 5=enormous -->
+    <entry name="iconSize" type="Int">
+      <label>Icon size</label>
+      <default>3</default>
+    </entry>
+
+    <!-- Labels -->
+    <entry name="showLabels" type="Bool">
+      <label>Show app labels</label>
+      <default>true</default>
+    </entry>
+
+    <!-- Sort -->
+    <entry name="alphaSort" type="Bool">
+      <label>Sort alphabetically</label>
+      <default>true</default>
+    </entry>
+
+    <!-- App name format: 0=name, 1=genericName, 2=nameGenericName, 3=genericNameName -->
+    <entry name="appNameFormat" type="Int">
+      <label>App name format</label>
+      <default>0</default>
+    </entry>
+
+    <!-- Theme -->
+    <entry name="darkTheme" type="Bool">
+      <label>Dark theme</label>
+      <default>true</default>
+    </entry>
+
+    <!-- Look: bookos | win11 -->
+    <entry name="themeName" type="String">
+      <label>Theme look</label>
+      <default>bookos</default>
+    </entry>
+
+    <!-- Blur radius (0 = no blur, handled at shell level via DashboardWindow) -->
+    <entry name="blurRadius" type="Double">
+      <label>Background blur radius</label>
+      <default>24.0</default>
+    </entry>
+
+    <!-- Favorites -->
+    <entry name="favoriteApps" type="StringList">
+      <label>Favorite apps</label>
+      <default></default>
+    </entry>
+    <entry name="favoriteSystemActions" type="StringList">
+      <label>Favorite system actions</label>
+      <default>suspend,hibernate,reboot,shutdown</default>
+    </entry>
+
+    <!-- Folders persistence -->
+    <entry name="foldersJson" type="String">
+      <label>Folders state (JSON)</label>
+      <default>[]</default>
+    </entry>
+
+    <!-- Item ordering persistence: { "App Name": pos, "folder:idx": pos } -->
+    <entry name="orderJson" type="String">
+      <label>Item order (JSON)</label>
+      <default>{}</default>
+    </entry>
+
+    <!-- Scroll mode: "paged" (snap to page) or "continuous" (free scroll) -->
+    <entry name="scrollMode" type="String">
+      <label>Scroll mode</label>
+      <default>paged</default>
+    </entry>
+
+    <!-- Custom icon -->
+    <entry name="useCustomIcon" type="Bool">
+      <label>Use custom button icon</label>
+      <default>false</default>
+    </entry>
+    <entry name="customIcon" type="String">
+      <label>Custom button icon</label>
+      <default>launch</default>
+    </entry>
+
+    <!-- Runners -->
+    <entry name="useExtraRunners" type="Bool">
+      <label>Use extra runners</label>
+      <default>false</default>
+    </entry>
+    <entry name="runners" type="StringList">
+      <label>Extra runners</label>
+      <default></default>
+    </entry>
+
+  </group>
+</kcfg>

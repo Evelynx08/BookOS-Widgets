@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "josrebe444@gmail.com",
+                "Name": "BookOS"
+            }
+        ],
+        "Category": "Application Launchers",
+        "Description": "BookOS Launchpad — paginated app grid with swipe, folders, search, blur and dark/light theme.",
+        "EnabledByDefault": true,
+        "Id": "bookos-launchpad",
+        "License": "GPL-2.0+",
+        "Name": "BookOS Launchpad",
+        "Version": "1.1.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.launchermenu"
+    ]
+}

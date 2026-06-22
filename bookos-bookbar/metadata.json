@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn" }],
+        "Icon": "media-playback-start",
+        "Id": "bookos-bookbar",
+        "Name": "Book Bar",
+        "Description": "Pill-shaped dynamic island for music, routines and charging",
+        "Version": "1.0",
+        "Category": "Multimedia",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

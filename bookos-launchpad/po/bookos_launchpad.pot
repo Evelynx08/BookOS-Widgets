@@ -1,0 +1,127 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: bookos_launchpad 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-16 00:00+0000\n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Add as Launcher to Panel"
+msgstr ""
+
+msgid "Add to Desktop"
+msgstr ""
+
+msgid "Add to Panel (Widget)"
+msgstr ""
+
+msgid "Appearance"
+msgstr ""
+
+msgid "Behaviour"
+msgstr ""
+
+msgid "Blur radius:"
+msgstr ""
+
+msgid "Dark theme:"
+msgstr ""
+
+msgid "Delete Folder"
+msgstr ""
+
+msgid "Edit Application…"
+msgstr ""
+
+msgid "Enormous"
+msgstr ""
+
+msgid "Folder"
+msgstr ""
+
+msgid "Generic name"
+msgstr ""
+
+msgid "Generic (Name)"
+msgstr ""
+
+msgid "Huge"
+msgstr ""
+
+msgid "Icon size:"
+msgstr ""
+
+msgid "Icons"
+msgstr ""
+
+msgid "Large"
+msgstr ""
+
+msgid "Launch"
+msgstr ""
+
+msgid "Medium"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Name format:"
+msgstr ""
+
+msgid "Name (Generic)"
+msgstr ""
+
+msgid "New folder"
+msgstr ""
+
+msgid "No results"
+msgstr ""
+
+msgid "Pin to Favorites"
+msgstr ""
+
+msgid "Properties"
+msgstr ""
+
+msgid "Rename Folder…"
+msgstr ""
+
+msgid "Search apps…"
+msgstr ""
+
+msgid "Show in File Manager"
+msgstr ""
+
+msgid "Show labels:"
+msgstr ""
+
+msgid "Small"
+msgstr ""
+
+msgid "Small Medium"
+msgstr ""
+
+msgid "Sort alphabetically:"
+msgstr ""
+
+msgid "Uninstall…"
+msgstr ""
+
+msgid "Unpin from Favorites"
+msgstr ""
+
+msgid "BookOS (Launchpad)"
+msgstr ""
+
+msgid "Windows 11"
+msgstr ""
+
+msgid "Look:"
+msgstr ""

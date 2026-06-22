@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "EVelyn"
+            }
+        ],
+        "Icon": "battery",
+        "Id": "bookos-battery-pro",
+        "Name": "BookOS Battery Pro",
+        "Description": "Widget de batería detallado para BookOS",
+        "Version": "1.2",
+        "Category": "System Information"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

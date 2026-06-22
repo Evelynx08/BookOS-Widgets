@@ -1,0 +1,16 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn", "Email": "josrebe444@gmail.com" }],
+        "Icon": "start-here-kde",
+        "Id": "bookos-menu",
+        "Name": "BookOS Menu",
+        "Name[es]": "Menú BookOS",
+        "Description": "Apple-style system menu for BookOS",
+        "Description[es]": "Menú de sistema estilo Apple para BookOS",
+        "Version": "1.0",
+        "Category": "System Information",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

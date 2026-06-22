@@ -1,0 +1,135 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: bookos_launchpad 1.0\n"
+"POT-Creation-Date: 2026-05-16 00:00+0000\n"
+"PO-Revision-Date: 2026-05-16 00:00+0000\n"
+"Last-Translator: BookOS\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Add as Launcher to Panel"
+msgstr "Añadir como lanzador al panel"
+
+msgid "Add to Desktop"
+msgstr "Añadir al escritorio"
+
+msgid "Add to Panel (Widget)"
+msgstr "Añadir al panel (widget)"
+
+msgid "Appearance"
+msgstr "Apariencia"
+
+msgid "Behaviour"
+msgstr "Comportamiento"
+
+msgid "Blur radius:"
+msgstr "Radio de desenfoque:"
+
+msgid "Dark theme:"
+msgstr "Tema oscuro:"
+
+msgid "Delete Folder"
+msgstr "Eliminar carpeta"
+
+msgid "Edit Application…"
+msgstr "Editar aplicación…"
+
+msgid "Enormous"
+msgstr "Enorme"
+
+msgid "Folder"
+msgstr "Carpeta"
+
+msgid "Generic name"
+msgstr "Nombre genérico"
+
+msgid "Generic (Name)"
+msgstr "Genérico (Nombre)"
+
+msgid "Huge"
+msgstr "Muy grande"
+
+msgid "Icon size:"
+msgstr "Tamaño de icono:"
+
+msgid "Icons"
+msgstr "Iconos"
+
+msgid "Large"
+msgstr "Grande"
+
+msgid "Launch"
+msgstr "Iniciar"
+
+msgid "Medium"
+msgstr "Mediano"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Name format:"
+msgstr "Formato del nombre:"
+
+msgid "Name (Generic)"
+msgstr "Nombre (Genérico)"
+
+msgid "New folder"
+msgstr "Nueva carpeta"
+
+msgid "No results"
+msgstr "Sin resultados"
+
+msgid "Pin to Favorites"
+msgstr "Anclar a favoritos"
+
+msgid "Properties"
+msgstr "Propiedades"
+
+msgid "Rename Folder…"
+msgstr "Renombrar carpeta…"
+
+msgid "Search apps…"
+msgstr "Buscar aplicaciones…"
+
+msgid "Show in File Manager"
+msgstr "Mostrar en el gestor de archivos"
+
+msgid "Show labels:"
+msgstr "Mostrar etiquetas:"
+
+msgid "Small"
+msgstr "Pequeño"
+
+msgid "Small Medium"
+msgstr "Pequeño-mediano"
+
+msgid "Sort alphabetically:"
+msgstr "Ordenar alfabéticamente:"
+
+msgid "Uninstall…"
+msgstr "Desinstalar…"
+
+msgid "Unpin from Favorites"
+msgstr "Desanclar de favoritos"
+
+msgid "BookOS (Launchpad)"
+msgstr "BookOS (Launchpad)"
+
+msgid "Windows 11"
+msgstr "Windows 11"
+
+msgid "Look:"
+msgstr "Aspecto:"
+
+msgid "Scroll mode:"
+msgstr "Modo de desplazamiento:"
+
+msgid "Paginated (snap to page)"
+msgstr "Paginado (ajuste por página)"
+
+msgid "Continuous (free scroll)"
+msgstr "Continuo (desplazamiento libre)"

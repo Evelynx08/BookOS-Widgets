@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "josrebe444@gmail.com",
+                "Name": "BookOS"
+            }
+        ],
+        "Category": "Application Launchers",
+        "Description": "BookOS Win11 Menu — Alternative Windows 11 style start menu.",
+        "EnabledByDefault": true,
+        "Id": "bookos-win11menu",
+        "License": "GPL-2.0+",
+        "Name": "BookOS Win11 Menu",
+        "Version": "1.0.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.launchermenu"
+    ]
+}

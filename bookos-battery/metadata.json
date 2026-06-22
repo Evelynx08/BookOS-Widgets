@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn" }],
+        "Icon": "battery",
+        "Id": "bookos-battery",
+        "Name": "Mi Batería Minimalista",
+        "Description": "Widget de batería minimalista y elegante para KDE Plasma 6",
+        "Version": "2.1",
+        "Category": "System Information",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

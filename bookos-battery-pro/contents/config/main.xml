@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="iconTheme"          type="Int">    <default>0</default>    </entry>
+    <entry name="iconWidth"          type="Int">    <default>23</default>   </entry>
+    <entry name="iconHeight"         type="Int">    <default>11</default>   </entry>
+    <entry name="percentPosition"    type="Int">    <default>0</default>    </entry>
+    <entry name="forceManager"       type="Int">    <default>0</default>    </entry>
+    <entry name="popupWidth"         type="Int">    <default>300</default>  </entry>
+    <entry name="popupHeight"        type="Int">    <default>0</default>    </entry>
+    <entry name="enableNotifications" type="Bool">  <default>true</default> </entry>
+    <entry name="showPercentage"     type="Bool">   <default>true</default> </entry>
+    <entry name="customFont"         type="String"> <default></default>     </entry>
+    <entry name="chargingColor"      type="String"> <default>#34C759</default> </entry>
+    <entry name="criticalColor"      type="String"> <default>#FF3B30</default> </entry>
+    <entry name="powerSaveColor"     type="String"> <default>#FFCC00</default> </entry>
+    <entry name="performanceColor"   type="String"> <default>#32ADE6</default> </entry>
+  </group>
+</kcfg>
