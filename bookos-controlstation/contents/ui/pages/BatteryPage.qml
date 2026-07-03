@@ -105,7 +105,9 @@ PageTemplate {
         remainingTime: batteryControl.remainingTime
         activeProfile: powerProfilesControl.activeProfile
         activeProfileError: powerProfilesControl.profileError
-        inhibitions: inhibitionControl.inhibitions
+        // Plasma 6.7 (powerdevil) renombró la propiedad a requestedInhibitions;
+        // el fallback cubre InhibitionControl/PowerManagementControl antiguos.
+        inhibitions: inhibitionControl.requestedInhibitions ?? inhibitionControl.inhibitions ?? []
         inhibitsLidAction: inhibitionControl.isLidPresent && !inhibitionControl.triggersLidAction
         profilesInstalled: powerProfilesControl.isPowerProfileDaemonInstalled
         profiles: powerProfilesControl.profiles

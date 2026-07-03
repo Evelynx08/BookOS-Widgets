@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn" }],
+        "Icon": "audio-volume-high",
+        "Id": "bookos-volume",
+        "Name": "BookOS Sonido",
+        "Name[es]": "BookOS Sonido",
+        "Description": "Control de volumen minimalista con estética BookOS",
+        "Description[es]": "Control de volumen minimalista con estética BookOS",
+        "Version": "1.0",
+        "Category": "Multimedia",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

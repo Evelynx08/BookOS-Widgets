@@ -588,7 +588,7 @@ PlasmoidItem {
                                         text: modelData.label
                                         font.family: root.customFont !== "" ? root.customFont : Kirigami.Theme.defaultFont.family
                                         font.pixelSize: 12
-                                        font.weight: isActive ? Font.SemiBold : Font.Normal
+                                        font.weight: isActive ? Font.DemiBold : Font.Normal
                                         color: isActive
                                             ? root.txt
                                             : Qt.rgba(root.txt.r, root.txt.g, root.txt.b, 0.55)

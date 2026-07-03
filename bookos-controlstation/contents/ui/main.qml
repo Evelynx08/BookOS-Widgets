@@ -150,7 +150,9 @@ PlasmoidItem {
     
     switchHeight: fullRepWidth
     switchWidth: fullRepWidth
-    preferredRepresentation: inPanel ? Plasmoid.compactRepresentation : Plasmoid.fullRepresentation
+    // Plasma 6: compact/fullRepresentation son propiedades del PlasmoidItem,
+    // no del attached Plasmoid (ahí son undefined y el panel abría la vista completa).
+    preferredRepresentation: inPanel ? root.compactRepresentation : root.fullRepresentation
     fullRepresentation: FullRepresentation { }
     compactRepresentation: CompactRepresentation {}
 

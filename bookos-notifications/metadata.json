@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn" }],
+        "Icon": "notifications",
+        "Id": "bookos-notifications",
+        "Name": "BookOS Notificaciones",
+        "Name[es]": "BookOS Notificaciones",
+        "Description": "Control de notificaciones y No molestar con estética BookOS",
+        "Description[es]": "Control de notificaciones y No molestar con estética BookOS",
+        "Version": "1.0",
+        "Category": "System Information",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-Provides": "org.kde.plasma.notifications"
+}

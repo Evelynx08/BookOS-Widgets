@@ -59,7 +59,7 @@ Lib.CardButton {
         anchors.fill: parent
         bookosColors: parent.bookosColors
         source: network.activeConnectionIcon
-        selected: (network.networkStatus.activeConnections != "") || isAirplane
+        selected: ((network.networkStatus?.activeConnections ?? "") != "") || isAirplane
         enableQuickAction: root.enableQuickActions
 
         onQuickActionTriggered: {

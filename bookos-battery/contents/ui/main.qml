@@ -438,6 +438,7 @@ PlasmoidItem {
         Layout.minimumWidth: root.popW; Layout.preferredWidth: root.popW; Layout.maximumWidth: root.popW
         Layout.minimumHeight:   root.popH > 0 ? root.popH : popupCol.implicitHeight + 32
         Layout.preferredHeight: root.popH > 0 ? root.popH : popupCol.implicitHeight + 32
+        Layout.maximumHeight:   root.popH > 0 ? root.popH : popupCol.implicitHeight + 32
         clip: false
 
         // Fondo BookOS — sólido, sin borde
@@ -469,14 +470,14 @@ PlasmoidItem {
             ColumnLayout {
                 id: popupCol
                 anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
-                spacing: 14
+                spacing: 12
 
                 // ── TÍTULO (BookOS header style) ─────────────────────
                 PlasmaComponents.Label {
-                    Layout.fillWidth: true; Layout.bottomMargin: -4
+                    Layout.fillWidth: true; Layout.bottomMargin: -2
                     text: "Batería"
                     font.family: root.resolvedFont; font.weight: Font.Bold
-                    font.pixelSize: 22; font.letterSpacing: -0.4
+                    font.pixelSize: 18; font.letterSpacing: -0.3
                     color: root.txt
                 }
 
@@ -763,69 +764,7 @@ PlasmoidItem {
                     Layout.leftMargin: 4
                 }
 
-                // intel_lpmd chip-card
-                Rectangle {
-                    visible: root.hasIntelLpmd
-                    Layout.fillWidth: true; radius: 18
-                    color: root.card; border.width: 1; border.color: root.brdCol
-                    implicitHeight: 48
-                    RowLayout {
-                        anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 18; spacing: 10
-                        Rectangle {
-                            width: 8; height: 8; radius: 4; color: root.hi
-                            SequentialAnimation on opacity {
-                                running: true; loops: Animation.Infinite
-                                NumberAnimation { from: 1.0; to: 0.4; duration: 1200; easing.type: Easing.InOutSine }
-                                NumberAnimation { from: 0.4; to: 1.0; duration: 1200; easing.type: Easing.InOutSine }
-                            }
-                        }
-                        PlasmaComponents.Label { text: "intel_lpmd activo"; font.family: root.resolvedFont; font.pixelSize: 13; font.weight: Font.Medium; color: root.txt }
-                        Item { Layout.fillWidth: true }
-                        PlasmaComponents.Label {
-                            visible: root.lpmdMode !== "unknown" && root.lpmdMode !== "na" && root.lpmdMode !== ""
-                            text: root.lpmdMode; font.family: root.resolvedFont; font.pixelSize: 11
-                            color: root.txt2
-                        }
-                    }
-                }
-
-                // ── CARD: Bluetooth ──────────────────────────────────
-                Rectangle {
-                    visible: root.btDevices.length > 0
-                    Layout.fillWidth: true; radius: 22
-                    color: root.card; border.width: 1; border.color: root.brdCol
-                    clip: true
-                    implicitHeight: btCol.implicitHeight
-
-                    ColumnLayout {
-                        id: btCol
-                        anchors { left: parent.left; right: parent.right; top: parent.top }
-                        spacing: 0
-                        Repeater {
-                            model: root.btDevices
-                            delegate: Item {
-                                Layout.fillWidth: true; Layout.preferredHeight: 44
-                                Rectangle {
-                                    visible: index < root.btDevices.length - 1
-                                    anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 16; rightMargin: 16 }
-                                    height: 1; color: root.divCol
-                                }
-                                RowLayout {
-                                    anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 10
-                                    PlasmaComponents.Label { text: modelData.icon || "📡"; font.pixelSize: 16 }
-                                    PlasmaComponents.Label { text: modelData.name; font.family: root.resolvedFont; font.pixelSize: 13; color: root.txt; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    PlasmaComponents.Label {
-                                        visible: modelData.pct > 0; text: modelData.pct + "%"
-                                        font.family: root.resolvedFont; font.pixelSize: 12
-                                        color: modelData.pct <= 20 ? root.colCritical : root.txt2
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── CARD: Consumo + Preferencias ─────────────────────
+                // ── CARD: Preferencias ───────────────────────────────
                 Rectangle {
                     Layout.fillWidth: true; radius: 22
                     color: root.card; border.width: 1; border.color: root.brdCol
@@ -836,45 +775,6 @@ PlasmoidItem {
                         id: actionsCol
                         anchors { left: parent.left; right: parent.right; top: parent.top }
                         spacing: 0
-
-                        // Consumo
-                        Item {
-                            Layout.fillWidth: true; Layout.preferredHeight: 56
-                            Rectangle {
-                                anchors.fill: parent
-                                color: sysMonMouse.containsMouse ? root.hovCol : "transparent"
-                                Behavior on color { ColorAnimation { duration: 120 } }
-                            }
-                            Rectangle {
-                                visible: !sysMonMouse.containsMouse && !prefMouse.containsMouse
-                                anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 20; rightMargin: 20 }
-                                height: 1; color: root.divCol; z: 2
-                            }
-                            RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 18; spacing: 14
-                                Rectangle {
-                                    width: 32; height: 32; radius: 16
-                                    color: root.isDarkMode ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06)
-                                    Image {
-                                        anchors.centerIn: parent; width: 18; height: 18; smooth: true; sourceSize: Qt.size(36, 36)
-                                        source: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="' + toHex(root.txt) + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2-7 4 14 2-7h3"/></svg>')
-                                    }
-                                }
-                                ColumnLayout {
-                                    Layout.fillWidth: true; spacing: 1
-                                    PlasmaComponents.Label { text: "Consumo de energía"; font.family: root.resolvedFont; font.pixelSize: 14; font.weight: Font.Medium; color: root.txt }
-                                    PlasmaComponents.Label {
-                                        text: (root.topProcess && !root.topProcess.includes("0% CPU"))
-                                            ? root.topProcess
-                                            : "Sin apps con consumo significativo"
-                                        font.family: root.resolvedFont; font.pixelSize: 11
-                                        color: root.txt2; Layout.fillWidth: true; elide: Text.ElideRight
-                                    }
-                                }
-                                PlasmaComponents.Label { text: "›"; font.pixelSize: 18; font.weight: Font.Medium; color: root.txt2; opacity: 0.6 }
-                            }
-                            MouseArea { id: sysMonMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { root.expanded = false; actionSource.connectSource("plasma-systemmonitor") } }
-                        }
 
                         // Preferencias
                         Item {
@@ -1016,45 +916,8 @@ PlasmoidItem {
 
     // timeSource removed — time estimation now done in JS via calcTimeRemaining()
 
-    Plasma5Support.DataSource {
-        id: topSource; engine: "executable"
-        connectedSources: root.popupOpen ? ["sh -c 'ps -eo comm,pcpu --sort=-pcpu 2>/dev/null | awk \"NR==2 && \\$2+0 > 5 {printf \\\"%s (%.0f%% CPU)\\\", \\$1, \\$2}\"'"] : []
-        interval: 5000
-        onNewData: (sourceName, data) => { root.topProcess = data["stdout"] ? data["stdout"].trim() : "" }
-    }
-
-    Plasma5Support.DataSource {
-        id: btSource; engine: "executable"
-        connectedSources: root.popupOpen ? [
-            "sh -c 'bluetoothctl devices Connected 2>/dev/null | awk \"{print \\$2}\" | while read mac; do " +
-            "  friendly=$(bluetoothctl info \"$mac\" 2>/dev/null | grep -i \"Name:\" | head -n1 | sed \"s/.*Name: //\"); " +
-            "  [ -z \"$friendly\" ] && continue; " +
-            "  mac_under=$(echo \"$mac\" | tr \":\" \"_\"); " +
-            "  pct=$(upower -e 2>/dev/null | grep -i \"$mac_under\" | head -n1 | xargs -I{} upower -i {} 2>/dev/null | grep -i percentage | awk \"{print \\$2}\" | tr -d \"%\"); " +
-            "  echo \"${friendly}|${pct:-0}\"; done | sort -u'"
-        ] : []
-        interval: 15000
-        onNewData: (sourceName, data) => {
-            if (!data["stdout"]) { root.btDevices = []; return }
-            var lines = data["stdout"].trim().split('\n').filter(function(l) { return l.includes("|") })
-            root.btDevices = lines.map(function(l) { var p = l.split("|"); return { name: p[0].trim(), pct: parseInt(p[1].trim()) || 0, icon: root.btIcon(p[0].trim()) } }).filter(function(d) { return d.name !== "" })
-        }
-    }
-
     Plasma5Support.DataSource { id: profileSetSource; engine: "executable"; connectedSources: []; onNewData: (s,d) => { disconnectSource(s) } }
     Plasma5Support.DataSource { id: extraCmdSource;   engine: "executable"; connectedSources: []; onNewData: (s,d) => { disconnectSource(s) } }
     Plasma5Support.DataSource { id: actionSource;     engine: "executable"; connectedSources: []; onNewData: (s,d) => { disconnectSource(s) } }
     Plasma5Support.DataSource { id: notifySource;     engine: "executable"; connectedSources: []; onNewData: (s,d) => { disconnectSource(s) } }
-
-    Plasma5Support.DataSource {
-        id: lpmdSource; engine: "executable"
-        connectedSources: ["sh -c 'if systemctl is-active --quiet intel_lpmd 2>/dev/null; then mode=$(cat /sys/devices/system/cpu/intel_lpmd/mode 2>/dev/null || echo unknown); echo active; echo $mode; else echo inactive; echo na; fi'"]
-        interval: 15000
-        onNewData: (sourceName, data) => {
-            if (!data["stdout"]) return
-            var lines = data["stdout"].trim().split('\n')
-            root.hasIntelLpmd = lines[0].trim() === "active"
-            root.lpmdMode = lines.length >= 2 ? lines[1].trim() : "unknown"
-        }
-    }
 }

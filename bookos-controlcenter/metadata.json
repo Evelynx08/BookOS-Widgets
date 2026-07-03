@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn" }],
+        "Icon": "configure",
+        "Id": "bookos-controlcenter",
+        "Name": "BookOS Centro de Control",
+        "Name[es]": "BookOS Centro de Control",
+        "Name[en]": "BookOS Control Center",
+        "Description": "Centro de control rápido con estética BookOS",
+        "Description[es]": "Centro de control rápido con estética BookOS",
+        "Description[en]": "Quick control center with BookOS aesthetic",
+        "Version": "1.0",
+        "Category": "System Information",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-NotificationArea": "true",
+    "X-Plasma-Provides": "org.kde.plasma.multimediacontrols,org.kde.plasma.powermanagement,org.kde.plasma.notifications"
+}

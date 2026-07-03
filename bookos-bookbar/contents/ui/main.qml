@@ -824,7 +824,7 @@ PlasmoidItem {
                                         }
                                     }
                                     Text {
-                                        text: bookBar.audioOut; color: bookBar.bbTx2; font.pixelSize: 10; font.weight: Font.SemiBold
+                                        text: bookBar.audioOut; color: bookBar.bbTx2; font.pixelSize: 10; font.weight: Font.DemiBold
                                         anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight
                                         width: Math.max(40, centerPill.width - 80)
                                     }
@@ -977,7 +977,7 @@ PlasmoidItem {
                         width: (parent.width-8)/2; height: 64; radius: 16; color: bookBar.bbHov
                         Column {
                             anchors.centerIn: parent; spacing: 3
-                            Text { text: "Horario"; color: bookBar.bbTx2; font.pixelSize: 9; font.weight: Font.SemiBold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: "Horario"; color: bookBar.bbTx2; font.pixelSize: 9; font.weight: Font.DemiBold; anchors.horizontalCenter: parent.horizontalCenter }
                             Row {
                                 spacing: 6; anchors.horizontalCenter: parent.horizontalCenter
                                 Text { text: bookBar.routine ? bookBar.routine.startTime : "--"; color: bookBar.bbTx; font.pixelSize: 13; font.weight: Font.Bold }
@@ -990,7 +990,7 @@ PlasmoidItem {
                         width: (parent.width-8)/2; height: 64; radius: 16; color: bookBar.bbHov
                         Column {
                             anchors.centerIn: parent; spacing: 2
-                            Text { text: "Objetivo"; color: bookBar.bbTx2; font.pixelSize: 9; font.weight: Font.SemiBold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: "Objetivo"; color: bookBar.bbTx2; font.pixelSize: 9; font.weight: Font.DemiBold; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: bookBar.routine ? bookBar.routine.objective : "--"; color: bookBar.bbTx; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4; anchors.horizontalCenter: parent.horizontalCenter }
                         }
                     }
@@ -1003,7 +1003,7 @@ PlasmoidItem {
                     scale: deactMA.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: 140 } }
                     Text { anchors.centerIn: parent; text: "Desactivar rutina"
-                        color: deactMA.containsMouse ? bookBar.bbRed : bookBar.bbTx; font.pixelSize: 12; font.weight: Font.SemiBold }
+                        color: deactMA.containsMouse ? bookBar.bbRed : bookBar.bbTx; font.pixelSize: 12; font.weight: Font.DemiBold }
                     MouseArea {
                         id: deactMA
                         anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

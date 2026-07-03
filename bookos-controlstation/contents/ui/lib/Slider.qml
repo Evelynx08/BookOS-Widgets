@@ -75,7 +75,7 @@ Card {
             Layout.fillHeight: true
             Layout.fillWidth: true
             spacing: 1
-            visible: showTitle
+            visible: showTitle && !bookosStyle
 
             PlasmaComponents.Label {
                 id: title
@@ -145,9 +145,9 @@ Card {
                     Rectangle {
                         id: pillFill
                         height: parent.height
-                        // Empty at the minimum, fills proportionally. Rounded both ends
-                        // (left cap is clipped round by the trough).
-                        width: bookosPill.frac <= 0 ? 0 : Math.max(height, bookosPill.frac * parent.width)
+                        // Empty at the minimum, grows proportionally. Left cap is clipped
+                        // round by the trough; small values show a thin nub, not a big circle.
+                        width: bookosPill.frac <= 0 ? 0 : bookosPill.frac * parent.width
                         radius: height / 2
                         color: root.bookosActive
                     }

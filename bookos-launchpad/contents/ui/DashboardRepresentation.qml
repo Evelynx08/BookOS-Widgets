@@ -163,6 +163,26 @@ Kicker.DashboardWindow {
         return rebuildUnifiedItems(allApps, folders, itemOrder)
     }
 
+    // Caché de apps: nombre, nombre normalizado (para buscar) e icono, leídos
+    // UNA vez del modelo. Antes cada tecla de búsqueda releía model.data() +
+    // normalize() para todas las apps. La lectura de model.count dentro del
+    // binding registra la dependencia → se rehace solo si cambia el modelo.
+    property var appCache: {
+        var model = allApps
+        if (!model) return []
+        var out = []
+        for (var i = 0; i < model.count; i++) {
+            var name = model.data(model.index(i, 0), Qt.DisplayRole) || ""
+            out.push({
+                name: name,
+                nName: normalize(name),
+                icon: model.data(model.index(i, 0), Qt.DecorationRole) || "",
+                sourceIdx: i
+            })
+        }
+        return out
+    }
+
     function rebuildUnifiedItems(model, folderArr, orderMap) {
         if (!model) return []
         // Map of folder member names → owning folder index
@@ -171,17 +191,16 @@ Kicker.DashboardWindow {
             var m = folderArr[f].members || []
             for (var k = 0; k < m.length; k++) memberSet[m[k]] = f
         }
-        // Cache app idx by name for folder member resolution
+        // Resolver por nombre desde la caché (sin releer el modelo)
         var appIdxByName = {}
         var appIconByName = {}
         var apps = []
-        for (var i = 0; i < model.count; i++) {
-            var name = model.data(model.index(i, 0), Qt.DisplayRole) || ""
-            var icon = model.data(model.index(i, 0), Qt.DecorationRole) || ""
-            appIdxByName[name]  = i
-            appIconByName[name] = icon
-            if (memberSet.hasOwnProperty(name)) continue   // hidden inside folder
-            apps.push({ type: "app", name: name, icon: icon, sourceIdx: i })
+        for (var i = 0; i < appCache.length; i++) {
+            var entry = appCache[i]
+            appIdxByName[entry.name]  = entry.sourceIdx
+            appIconByName[entry.name] = entry.icon
+            if (memberSet.hasOwnProperty(entry.name)) continue   // hidden inside folder
+            apps.push({ type: "app", name: entry.name, icon: entry.icon, sourceIdx: entry.sourceIdx })
         }
         // Folders go first (typical macOS launchpad behaviour: folders mixed at front)
         var out = []
@@ -230,9 +249,9 @@ Kicker.DashboardWindow {
     // Total items count
     property int unifiedCount: unifiedItems.length
 
-    // ── local search: filtra unifiedItems (apps + miembros de folders) ──
+    // ── local search: filtra la caché (apps + miembros de folders) ──
     property string searchText: ""
-    property var searchResults: filterSearch(searchText, allApps, folders)
+    property var searchResults: filterSearch(searchText, appCache)
     property int searchSelectedIdx: 0
     onSearchResultsChanged: searchSelectedIdx = 0
 
@@ -255,33 +274,51 @@ Kicker.DashboardWindow {
                 .trim()
     }
 
-    function filterSearch(query, model, folderArr) {
-        if (!query || !model) return []
+    // Puntúa un candidato contra la query normalizada. Menor = mejor; -1 = no matchea.
+    //   0 exacto · 1 prefijo · 2 prefijo de palabra ("code"→"Visual Studio Code")
+    //   3 iniciales ("vsc"→"Visual Studio Code") · 4+ substring (penaliza posición)
+    //   8 subsecuencia difusa ("gmp"→"Gimp", solo con query de 3+ letras)
+    function scoreMatch(nName, q) {
+        if (nName === q) return 0
+        if (nName.indexOf(q) === 0) return 1
+        var words = nName.split(/[\s\-_.()]+/)
+        var initials = ""
+        for (var w = 0; w < words.length; w++) {
+            if (!words[w]) continue
+            if (w > 0 && words[w].indexOf(q) === 0) return 2
+            initials += words[w].charAt(0)
+        }
+        if (q.length >= 2 && initials.indexOf(q) === 0) return 3
+        var pos = nName.indexOf(q)
+        if (pos > 0) return 4 + Math.min(pos, 30) / 100
+        if (q.length >= 3) {
+            var qi = 0
+            for (var i = 0; i < nName.length && qi < q.length; i++)
+                if (nName.charAt(i) === q.charAt(qi)) qi++
+            if (qi === q.length) return 8
+        }
+        return -1
+    }
+
+    function filterSearch(query, cache) {
+        if (!query || !cache) return []
         var q = normalize(query)
         if (q.length === 0) return []
         var hits = []
-        for (var i = 0; i < model.count; i++) {
-            var name = model.data(model.index(i, 0), Qt.DisplayRole) || ""
-            var nName = normalize(name)
-            var pos = nName.indexOf(q)
-            if (pos === -1) continue
-            hits.push({
-                name: name,
-                nName: nName,
-                pos: pos,
-                icon: model.data(model.index(i, 0), Qt.DecorationRole) || "",
-                sourceIdx: i
-            })
-            if (hits.length >= 64) break
+        for (var i = 0; i < cache.length; i++) {
+            var entry = cache[i]
+            var s = scoreMatch(entry.nName, q)
+            if (s < 0) continue
+            hits.push({ name: entry.name, nName: entry.nName, score: s,
+                        icon: entry.icon, sourceIdx: entry.sourceIdx })
         }
-        // sort: prefix match first, then position, then alpha
+        // mejor puntuación primero; a igualdad, nombre más corto y luego alfabético
         hits.sort(function(a, b) {
-            var ap = a.pos === 0 ? 0 : 1
-            var bp = b.pos === 0 ? 0 : 1
-            if (ap !== bp) return ap - bp
-            if (a.pos !== b.pos) return a.pos - b.pos
+            if (a.score !== b.score) return a.score - b.score
+            if (a.nName.length !== b.nName.length) return a.nName.length - b.nName.length
             return a.nName.localeCompare(b.nName)
         })
+        if (hits.length > 64) hits.length = 64
         return hits
     }
 
@@ -616,15 +653,6 @@ Kicker.DashboardWindow {
             }
         }
 
-        // ── runner model for search ───────────────────────────────────
-        Kicker.RunnerModel {
-            id: runnerModel
-            appletInterface: kicker
-            favoritesModel:  kicker.globalFavorites
-            mergeResults:    true
-            runners:         ["services"]
-        }
-
         // Mouse wheel (vertical) → page change (paged) or smooth scroll (continuous).
         // Touchpad horiz scroll handled by Flickable nativamente.
         WheelHandler {
@@ -726,10 +754,7 @@ Kicker.DashboardWindow {
                 placeholderTextColor:  Qt.rgba(fgColor.r, fgColor.g, fgColor.b, 0.5)
                 font.pixelSize:        Kirigami.Units.gridUnit * 0.85
 
-                onTextChanged: {
-                    runnerModel.query = text
-                    root.searchText = text
-                }
+                onTextChanged: root.searchText = text
 
                 Keys.onPressed: event => {
                     if (!root.searching) {
@@ -866,6 +891,10 @@ Kicker.DashboardWindow {
                         columns:        cfg_cols
                         rowSpacing:     0
                         columnSpacing:  0
+                        // Solo renderiza la página actual y sus vecinas (o todas
+                        // mientras el Flickable se mueve) — el resto no pinta.
+                        visible: pagesFlick.moving || pagesFlick.snapping
+                                 || Math.abs(index - root.currentPage) <= 1
 
                         property int startIdx: index * appsPerPage
                         property int countOnPage: Math.min(appsPerPage,
@@ -899,6 +928,18 @@ Kicker.DashboardWindow {
                                                       && root.dragHoverMode === "move"
                                                       && root.dragHoverIdx === globalIdx + 1
                                                       && root.dragSourceIdx !== globalIdx
+
+                                // hover suave — mismo estilo que la selección en búsqueda
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: Kirigami.Units.smallSpacing
+                                    radius: Kirigami.Units.gridUnit
+                                    visible: cellHover.hovered && root.dragSourceIdx < 0
+                                    color: root.cfg_darkTheme
+                                           ? Qt.rgba(1, 1, 1, 0.08)
+                                           : Qt.rgba(0, 0, 0, 0.06)
+                                }
+                                HoverHandler { id: cellHover }
 
                                 // merge highlight (centered glow)
                                 Rectangle {
@@ -1042,9 +1083,6 @@ Kicker.DashboardWindow {
                                             dragGhost.ghostIcon        = cell.appIcon || ""
                                         }
                                         dragGhost.visible = true
-                                        console.log("BookOS: drag start globalIdx=", cell.globalIdx,
-                                                    "isFolder=", cell.isFolder,
-                                                    "name=", cell.appName)
                                     }
 
                                     onPositionChanged: mouse => {
@@ -1122,7 +1160,8 @@ Kicker.DashboardWindow {
             anchors.top:              searchBar.bottom
             anchors.bottom:           dotsRow.top
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.topMargin:        Kirigami.Units.largeSpacing * 2
+            // mismo margen que gridArea: al buscar, la cuadrícula no salta
+            anchors.topMargin:        Kirigami.Units.gridUnit * 2
             anchors.bottomMargin:     Kirigami.Units.gridUnit
             width:  cfg_cols * root.cellW
             height: cfg_rows * root.cellH

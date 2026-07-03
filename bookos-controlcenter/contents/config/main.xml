@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="gridRows" type="Int">
+      <default>2</default>
+      <min>1</min>
+      <max>4</max>
+    </entry>
+    <entry name="enabledTiles" type="String">
+      <default>airplane,dnd,saver,keepon,dark,share,screenshot,lock</default>
+    </entry>
+    <entry name="headerAlign" type="String">
+      <default>right</default>
+    </entry>
+    <entry name="sectionOrder" type="String">
+      <default>connectivity,grid,sliders,media</default>
+    </entry>
+  </group>
+</kcfg>

@@ -25,8 +25,9 @@ PageTemplate {
         id: config
     }
 
-    property bool volumeFeedback: config.audioFeedback
-    property bool globalMute: config.globalMute
+    property bool volumeFeedback: config.audioFeedback ?? false
+    // Plasma 6.7 (plasma-pa) partió globalMute en globalMuteSinks/globalMuteSources.
+    property bool globalMute: config.globalMuteSinks ?? config.globalMute ?? false
     property string displayName: i18n("Audio Volume")
     property QtObject draggedStream: null
 

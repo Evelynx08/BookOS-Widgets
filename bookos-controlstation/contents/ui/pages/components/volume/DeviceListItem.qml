@@ -39,8 +39,15 @@ ListItemBase {
 
     onMutedChanged: {
         if (type === "sink" && globalMute && !model.Muted) {
-            config.globalMute = false;
-            config.globalMuteDevices = [];
+            // Plasma 6.7 renombró globalMute→globalMuteSinks y
+            // globalMuteDevices→globalMuteSinksMutedDevices; probar API nueva primero.
+            if (config.globalMuteSinks !== undefined) {
+                config.globalMuteSinks = false;
+                config.globalMuteSinksMutedDevices = [];
+            } else {
+                config.globalMute = false;
+                config.globalMuteDevices = [];
+            }
             config.save();
         }
     }
