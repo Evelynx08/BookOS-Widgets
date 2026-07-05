@@ -1140,7 +1140,8 @@ PlasmoidItem {
     // ACCIONES
     // ═══════════════════════════════════════════════════════════════════════
     function toggleWifi() { root.wifiOn = !root.wifiOn; cmd.run("nmcli radio wifi " + (root.wifiOn ? "on" : "off")); stTimer.restart() }
-    function toggleBt()   { root.btOn = !root.btOn; cmd.run("bluetoothctl power " + (root.btOn ? "on" : "off")); stTimer.restart() }
+    // rfkill persiste entre reinicios (systemd-rfkill); `bluetoothctl power off` no (AutoEnable lo reenciende).
+    function toggleBt()   { root.btOn = !root.btOn; cmd.run(root.btOn ? "sh -c 'rfkill unblock bluetooth; bluetoothctl power on'" : "rfkill block bluetooth"); stTimer.restart() }
     function toggleNight(){ BC.NightLightInhibitor.toggleInhibition() }
     function toggleAirplane() {
         root.airplaneOn = !root.airplaneOn

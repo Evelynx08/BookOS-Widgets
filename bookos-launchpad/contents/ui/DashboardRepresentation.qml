@@ -758,9 +758,18 @@ Kicker.DashboardWindow {
 
                 Keys.onPressed: event => {
                     if (!root.searching) {
+                        // Sin búsqueda el foco vive aquí: si no tratamos las
+                        // flechas, el TextField se las queda (mover cursor) y
+                        // nunca llegan al paginador global de root.
                         if (event.key === Qt.Key_Escape) {
                             event.accepted = true
                             root.toggle()
+                        } else if (event.key === Qt.Key_Right || event.key === Qt.Key_PageDown || event.key === Qt.Key_Down) {
+                            event.accepted = true
+                            goNextPage()
+                        } else if (event.key === Qt.Key_Left || event.key === Qt.Key_PageUp || event.key === Qt.Key_Up) {
+                            event.accepted = true
+                            goPrevPage()
                         }
                         return
                     }
@@ -817,6 +826,30 @@ Kicker.DashboardWindow {
 
             property int gridW: cfg_cols * root.cellW
             property int gridH: cfg_rows * root.cellH
+
+            // La rueda del ratón: el Flickable consumía el evento antes de que
+            // llegara al WheelHandler global — este overlay (solo rueda, los
+            // clicks pasan) la captura primero y pagina.
+            Item {
+                anchors.fill: parent
+                z: 40
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse
+                    onWheel: (event) => {
+                        var dy = event.angleDelta.y
+                        if (root.isPaged) {
+                            if (dy <= -60) goNextPage()
+                            else if (dy >= 60) goPrevPage()
+                        } else {
+                            var step = root.cellW * 1.2
+                            pagesFlick.contentX = Math.max(0,
+                                Math.min(pagesFlick.contentWidth - pagesFlick.width,
+                                         pagesFlick.contentX - (dy / 120) * step))
+                        }
+                        event.accepted = true
+                    }
+                }
+            }
 
             Flickable {
                 id: pagesFlick

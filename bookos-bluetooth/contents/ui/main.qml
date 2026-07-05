@@ -314,9 +314,13 @@ PlasmoidItem {
     // ACCIONES
     // ═══════════════════════════════════════════════════════════════════════
     function togglePower() {
-        var target = root.powered ? "off" : "on"
-        root.powered = !root.powered
-        cmd.run("bluetoothctl power " + target)
+        // rfkill y no `bluetoothctl power`: systemd-rfkill persiste el
+        // soft-block entre reinicios; con power off, AutoEnable de bluez
+        // lo volvía a encender en cada arranque.
+        var turnOn = !root.powered
+        root.powered = turnOn
+        cmd.run(turnOn ? "sh -c 'rfkill unblock bluetooth; bluetoothctl power on'"
+                       : "rfkill block bluetooth")
         listTimer.restart()
     }
     function toggleDevice(d) {
