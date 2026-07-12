@@ -87,6 +87,18 @@ PlasmoidItem {
         var body = '<g transform="translate(2.5 2.5) scale(0.79)">' + inner + '</g>'
         return svg(body, color)
     }
+    // sol progresivo: crece el círculo y los rayos ganan presencia con el brillo
+    function icoSunPct(pct, color) {
+        var f = Math.max(0, Math.min(100, pct)) / 100
+        var r = 3.2 + 2.2 * f
+        var rayOp = (0.25 + 0.75 * f).toFixed(2)
+        var rays = '<g opacity="' + rayOp + '"><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>' +
+                   '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>' +
+                   '<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>' +
+                   '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g>'
+        var body = '<g transform="translate(2.5 2.5) scale(0.79)"><circle cx="12" cy="12" r="' + r.toFixed(1) + '"/>' + rays + '</g>'
+        return svg(body, color)
+    }
     function icoKbd(color) {
         return svg('<rect x="2" y="6" width="20" height="12" rx="2"/>' +
             '<line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/>' +
@@ -156,13 +168,31 @@ PlasmoidItem {
             anchors { left: parent.left; right: parent.right; top: parent.top; margins: 18 }
             spacing: 16
 
-            PlasmaComponents.Label {
-                text: root.tr("Brillo","Brightness")
-                font.family: root.resolvedFont; font.weight: Font.Bold
-                font.pixelSize: 18; font.letterSpacing: -0.3
-                color: root.txt
+            RowLayout {
                 Layout.fillWidth: true
                 Layout.bottomMargin: -2
+                PlasmaComponents.Label {
+                    text: root.tr("Brillo","Brightness")
+                    font.family: root.resolvedFont; font.weight: Font.Bold
+                    font.pixelSize: 18; font.letterSpacing: -0.3
+                    color: root.txt
+                    Layout.fillWidth: true
+                }
+                Rectangle {
+                    Layout.preferredHeight: 26; Layout.preferredWidth: cfgTxt.implicitWidth + 22
+                    radius: 13
+                    color: cfgM.containsMouse ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12)
+                                               : (root.isDarkMode ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0,0,0,0.06))
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    PlasmaComponents.Label {
+                        id: cfgTxt; anchors.centerIn: parent
+                        text: "Config"
+                        font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.DemiBold
+                        color: cfgM.containsMouse ? root.hi : root.txt
+                    }
+                    MouseArea { id: cfgM; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: root.openSettings("pantalla") }
+                }
             }
 
             // ── PANTALLA ─────────────────────────────────────────────────
@@ -175,7 +205,18 @@ PlasmoidItem {
                 }
                 RowLayout {
                     Layout.fillWidth: true; spacing: 9
-                    Image { width: 15; height: 15; sourceSize: Qt.size(30,30); smooth: true; source: root.icoSun(0, root.txt2) }
+                    Image {
+                        id: sunIcon
+                        // se congela durante el drag para no regenerar el SVG en cada pixel
+                        property int sunPct: root.brightness
+                        Connections {
+                            target: root
+                            function onBrightnessChanged() { if (!root.dragging) sunIcon.sunPct = root.brightness }
+                            function onDraggingChanged() { if (!root.dragging) sunIcon.sunPct = root.brightness }
+                        }
+                        width: 16; height: 16; sourceSize: Qt.size(32,32); smooth: true
+                        source: root.icoSunPct(sunPct, sunPct > 60 ? root.txt : root.txt2)
+                    }
                     BookPill {
                         Layout.fillWidth: true
                         value: root.brightness
@@ -183,7 +224,6 @@ PlasmoidItem {
                         onMovedTo: (v) => { root.dragging = true; root.setBrightness(Math.max(root.minPct, v)) }
                         onReleased: root.dragging = false
                     }
-                    Image { width: 18; height: 18; sourceSize: Qt.size(36,36); smooth: true; source: root.icoSun(1, root.txt) }
                 }
             }
 
@@ -198,7 +238,7 @@ PlasmoidItem {
                 }
                 RowLayout {
                     Layout.fillWidth: true; spacing: 9
-                    Image { width: 17; height: 17; sourceSize: Qt.size(34,34); smooth: true; source: root.icoKbd(root.kbd > 0 ? root.hi : root.txt2) }
+                    Image { width: 14; height: 14; sourceSize: Qt.size(28,28); smooth: true; source: root.icoKbd(root.kbd > 0 ? root.hi : root.txt2) }
                     BookPill {
                         Layout.fillWidth: true
                         value: root.kbd

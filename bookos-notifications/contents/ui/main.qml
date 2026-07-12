@@ -74,7 +74,7 @@ PlasmoidItem {
         function onScreensMirroredChanged() { root.syncState() }
     }
     Timer { running: root.dnd; interval: 30000; repeat: true; onTriggered: root.syncState() }
-    Component.onCompleted: syncState()
+    Component.onCompleted: { syncState(); loadPopupConfig() }
 
     // ── Historial de notificaciones ──────────────────────────────────────
     NotificationManager.Notifications {
@@ -87,6 +87,128 @@ PlasmoidItem {
     }
     readonly property int notifCount: historyModel.count
     readonly property int unread: historyModel.unreadNotificationsCount
+
+    // ── Popups estilo toast (equivalente al OSD nativo de KDE) ───────────
+    property bool popupsReady: false
+    property var activePopups: []
+    Timer { interval: 1500; running: true; repeat: false; onTriggered: root.popupsReady = true }
+
+    // ── Config compartida con bookos-settings (~/.config/bookos-notificationsrc) ──
+    property bool   cfgEnabled: true
+    property int    cfgTimeout: 6          // segundos; 0 = no cerrar solo
+    property bool   cfgCountdown: true
+    property string cfgPosition: "bottomright"  // topleft|topright|bottomleft|bottomright|topcenter
+    property string cfgTheme: "auto"       // auto|light|dark
+
+    Plasma5Support.DataSource {
+        id: cfgSrc; engine: "executable"; connectedSources: []
+        onNewData: (s, data) => {
+            disconnectSource(s)
+            var lines = (data.stdout || "").trim().split("\n")
+            if (lines.length >= 5) {
+                root.cfgEnabled   = lines[0].trim() !== "false"
+                root.cfgTimeout   = parseInt(lines[1]) >= 0 ? parseInt(lines[1]) : 6
+                root.cfgCountdown = lines[2].trim() !== "false"
+                var pos = lines[3].trim()
+                root.cfgPosition  = ["topleft","topright","bottomleft","bottomright","topcenter"].indexOf(pos) >= 0 ? pos : "bottomright"
+                var th = lines[4].trim()
+                root.cfgTheme     = ["auto","light","dark"].indexOf(th) >= 0 ? th : "auto"
+                root.repositionPopups()
+            }
+        }
+    }
+    function loadPopupConfig() {
+        cfgSrc.connectSource("sh -c '" +
+            "f=bookos-notificationsrc; g=Popups; " +
+            "kreadconfig6 --file $f --group $g --key Enabled --default true; " +
+            "kreadconfig6 --file $f --group $g --key Timeout --default 6; " +
+            "kreadconfig6 --file $f --group $g --key ShowCountdown --default true; " +
+            "kreadconfig6 --file $f --group $g --key Position --default bottomright; " +
+            "kreadconfig6 --file $f --group $g --key Theme --default auto'")
+    }
+    // recarga periódica: recoge cambios hechos desde bookos-settings o el diálogo de config
+    Timer { interval: 10000; running: true; repeat: true; onTriggered: root.loadPopupConfig() }
+
+    Connections {
+        target: historyModel
+        function onRowsInserted(parent, first, last) {
+            if (!root.popupsReady) return
+            for (var r = first; r <= last; r++) root.showNotificationPopup(r)
+        }
+    }
+
+    function showNotificationPopup(row) {
+        if (root.dnd || !root.cfgEnabled) return
+        var idx = historyModel.index(row, 0)
+        if (historyModel.data(idx, NotificationManager.Notifications.ExpiredRole)) return
+        if (historyModel.data(idx, NotificationManager.Notifications.DismissedRole)) return
+
+        var comp = Qt.createComponent(Qt.resolvedUrl("NotificationPopup.qml"))
+        if (comp.status !== Component.Ready) { console.log("bookos-notifications: popup error", comp.errorString()); return }
+
+        var id = historyModel.data(idx, NotificationManager.Notifications.IdRole)
+        var win = comp.createObject(root, {
+            summary: historyModel.data(idx, NotificationManager.Notifications.SummaryRole) || "",
+            body: historyModel.data(idx, NotificationManager.Notifications.BodyRole) || "",
+            appName: historyModel.data(idx, NotificationManager.Notifications.ApplicationNameRole) || "",
+            appIcon: historyModel.data(idx, NotificationManager.Notifications.ApplicationIconNameRole) || "dialog-information",
+            actionNames: historyModel.data(idx, NotificationManager.Notifications.ActionNamesRole) || [],
+            actionLabels: historyModel.data(idx, NotificationManager.Notifications.ActionLabelsRole) || [],
+            notifId: id,
+            timeoutMs: root.cfgTimeout * 1000,
+            showCountdown: root.cfgCountdown,
+            themeMode: root.cfgTheme
+        })
+        if (!win) return
+
+        win.dismissed.connect(function() { root.closePopupWindow(win) })
+        win.defaultActionInvoked.connect(function() {
+            var r2 = root.findRowById(id)
+            if (r2 >= 0) historyModel.invokeDefaultAction(historyModel.index(r2, 0))
+            root.closePopupWindow(win)
+        })
+        win.actionInvoked.connect(function(actionId) {
+            var r2 = root.findRowById(id)
+            if (r2 >= 0) historyModel.invokeAction(historyModel.index(r2, 0), actionId)
+            root.closePopupWindow(win)
+        })
+
+        root.activePopups.push(win)
+        root.repositionPopups()
+    }
+
+    function findRowById(id) {
+        for (var i = 0; i < historyModel.count; i++) {
+            if (historyModel.data(historyModel.index(i, 0), NotificationManager.Notifications.IdRole) === id) return i
+        }
+        return -1
+    }
+
+    function closePopupWindow(win) {
+        var i = root.activePopups.indexOf(win)
+        if (i >= 0) root.activePopups.splice(i, 1)
+        win.destroy()
+        root.repositionPopups()
+    }
+
+    function repositionPopups() {
+        var screen = Qt.application.screens[0]
+        if (!screen) return
+        var margin = 20, gap = 10
+        var topMargin = 56      // hueco para panel superior / botones de ventana
+        var bottomMargin = 48   // hueco para dock / panel inferior
+        var pos = root.cfgPosition
+        var top = pos.indexOf("top") === 0
+        var y = top ? topMargin : screen.height - bottomMargin
+        for (var i = root.activePopups.length - 1; i >= 0; i--) {
+            var w = root.activePopups[i]
+            if (pos === "topcenter")            w.x = Math.round((screen.width - w.width) / 2)
+            else if (pos.indexOf("left") >= 0)  w.x = margin
+            else                                w.x = screen.width - w.width - margin
+            if (top) { w.y = y; y += w.height + gap }
+            else     { y -= w.height; w.y = y; y -= gap }
+        }
+    }
 
     function clearAllNotifs() { historyModel.clear(NotificationManager.Notifications.ClearExpired) }
     function closeNotif(i) { historyModel.close(historyModel.index(i, 0)) }
@@ -193,6 +315,7 @@ PlasmoidItem {
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 8
                 PlasmaComponents.Label {
                     text: root.tr("Notificaciones","Notifications")
                     font.family: root.resolvedFont; font.weight: Font.Bold
@@ -201,16 +324,32 @@ PlasmoidItem {
                     Layout.fillWidth: true
                 }
                 Rectangle {
+                    Layout.preferredHeight: 26; Layout.preferredWidth: nCfgTxt.implicitWidth + 22
+                    radius: 13
+                    color: nCfgM.containsMouse ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12)
+                                                : (root.isDarkMode ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0,0,0,0.06))
+                    Behavior on color { ColorAnimation { duration: 130 } }
+                    PlasmaComponents.Label {
+                        id: nCfgTxt; anchors.centerIn: parent
+                        text: "Config"
+                        font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.DemiBold
+                        color: nCfgM.containsMouse ? root.hi : root.txt
+                    }
+                    MouseArea { id: nCfgM; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: root.openSettings("notificaciones") }
+                }
+                Rectangle {
                     visible: root.notifCount > 0
+                    readonly property color red: root.isDarkMode ? "#FF453A" : "#FF3B30"
                     Layout.preferredHeight: 26; Layout.preferredWidth: clearTxt.implicitWidth + 22
                     radius: 13
-                    color: clearMouse.containsMouse ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12) : "transparent"
+                    color: clearMouse.containsMouse ? Qt.rgba(red.r, red.g, red.b, 0.20) : Qt.rgba(red.r, red.g, red.b, 0.12)
                     Behavior on color { ColorAnimation { duration: 130 } }
                     PlasmaComponents.Label {
                         id: clearTxt; anchors.centerIn: parent
-                        text: root.tr("Borrar todo","Clear all")
+                        text: root.tr("Borrar todo","Erase all")
                         font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.DemiBold
-                        color: root.hi
+                        color: parent.red
                     }
                     MouseArea { id: clearMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                         onClicked: root.clearAllNotifs() }
@@ -373,61 +512,37 @@ PlasmoidItem {
                         text: root.tr("Silenciar durante","Mute for"); Layout.leftMargin: 4
                         font.family: root.resolvedFont; font.weight: Font.DemiBold; font.pixelSize: 12; color: root.txt2
                     }
-                    Repeater {
-                        model: [
-                            { label: root.tr("1 hora","1 hour"),    mins: 60 },
-                            { label: root.tr("4 horas","4 hours"),  mins: 240 },
-                            { label: root.tr("8 horas","8 hours"),  mins: 480 },
-                            { label: root.tr("Hasta desactivarlo","Until I turn it off"), mins: -2 }
-                        ]
-                        delegate: Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 40; radius: 12
-                            color: durMouse.containsMouse ? Qt.rgba(root.purple.r, root.purple.g, root.purple.b, root.isDarkMode ? 0.20 : 0.12)
-                                                          : (root.isDarkMode ? Qt.rgba(1,1,1,0.05) : Qt.rgba(0,0,0,0.035))
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            scale: durMouse.pressed ? 0.98 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
-                            RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2; rowSpacing: 6; columnSpacing: 6
+                        Repeater {
+                            model: [
+                                { label: root.tr("1 hora","1 hour"),    mins: 60 },
+                                { label: root.tr("4 horas","4 hours"),  mins: 240 },
+                                { label: root.tr("8 horas","8 hours"),  mins: 480 },
+                                { label: root.tr("Hasta desactivarlo","Until deactivate"), mins: -2 }
+                            ]
+                            delegate: Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 38; radius: 12
+                                color: durMouse.containsMouse ? Qt.rgba(root.purple.r, root.purple.g, root.purple.b, root.isDarkMode ? 0.20 : 0.12)
+                                                              : (root.isDarkMode ? Qt.rgba(1,1,1,0.05) : Qt.rgba(0,0,0,0.035))
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                scale: durMouse.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 100 } }
                                 PlasmaComponents.Label {
-                                    Layout.fillWidth: true; text: modelData.label
-                                    font.family: root.resolvedFont; font.pixelSize: 13; font.weight: Font.Medium
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.Medium
                                     color: durMouse.containsMouse ? root.purple : root.txt
                                 }
-                                PlasmaComponents.Label {
-                                    text: modelData.mins === -2 ? "∞" : (modelData.mins >= 60 ? (modelData.mins/60) + "h" : modelData.mins + "m")
-                                    font.family: root.resolvedFont; font.pixelSize: 12; color: root.txt2
-                                }
+                                MouseArea { id: durMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: { root.setDndFor(modelData.mins); root.pickDuration = false } }
                             }
-                            MouseArea { id: durMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                onClicked: { root.setDndFor(modelData.mins); root.pickDuration = false } }
                         }
                     }
                 }
             }
 
-            // ── Footer ───────────────────────────────────────────────────
-            Rectangle {
-                id: settBtn
-                readonly property bool hov: settMouse.containsMouse
-                readonly property color fg: hov ? root.hi : root.txt
-                Layout.fillWidth: true; Layout.preferredHeight: 38
-                radius: height / 2
-                color: hov ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12)
-                           : (root.isDarkMode ? Qt.rgba(1,1,1,0.07) : Qt.rgba(0,0,0,0.05))
-                border.width: 1
-                border.color: hov ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, 0.40) : "transparent"
-                Behavior on color { ColorAnimation { duration: 130 } }
-                scale: settMouse.pressed ? 0.97 : 1.0
-                Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
-                RowLayout {
-                    anchors.centerIn: parent; spacing: 7
-                    Image { width: 15; height: 15; sourceSize: Qt.size(30,30); smooth: true; source: root.icoSettings(settBtn.fg) }
-                    PlasmaComponents.Label { text: root.tr("Ajustes de notificaciones","Notification settings"); font.family: root.resolvedFont; font.pixelSize: 13; font.weight: Font.DemiBold; color: settBtn.fg }
-                }
-                MouseArea { id: settMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: root.openSettings("notificaciones") }
-            }
         }
     }
 

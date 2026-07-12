@@ -4,16 +4,69 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.plasma5support as Plasma5Support
+import org.kde.bluezqt as BluezQt
 import org.kde.kirigami as Kirigami
 import QtQuick.Effects
 
 PlasmoidItem {
     id: root
 
-    // ── ESTADO ───────────────────────────────────────────────────────────
-    property bool powered:    false
+    // ── ESTADO (backend nativo BluezQt) ──────────────────────────────────
+    readonly property bool powered: BluezQt.Manager.bluetoothOperational
     property bool scanning:   false
-    property var  devices:    []   // [{name, mac, connected, type, pct}]
+    property var  devices:    []   // [{dev, name, mac, connected, type, pct}]
+
+    // reconstruye la lista desde los objetos Device nativos del Manager
+    function rebuildDevices() {
+        var arr = BluezQt.Manager.devices || []
+        var out = []
+        for (var i = 0; i < arr.length; i++) {
+            var dev = arr[i]
+            if (!dev) continue
+            out.push({
+                dev: dev,
+                name: dev.name && dev.name !== "" ? dev.name : dev.address,
+                mac: dev.address,
+                connected: dev.connected,
+                type: root.devType(dev.name || ""),
+                pct: dev.battery ? dev.battery.percentage : 0
+            })
+        }
+        out.sort(function(a, b){ return (b.connected ? 1 : 0) - (a.connected ? 1 : 0) })
+        // seguimiento de "conectado desde"
+        var cs = root.connSince
+        out.forEach(function(d){
+            if (d.connected && !cs[d.mac]) cs[d.mac] = new Date()
+            else if (!d.connected && cs[d.mac]) delete cs[d.mac]
+        })
+        root.connSince = cs
+        root.devices = out
+    }
+    Connections {
+        target: BluezQt.Manager
+        function onDeviceAdded()   { root.rebuildDevices() }
+        function onDeviceRemoved() { root.rebuildDevices() }
+        function onDeviceChanged()          { root.rebuildDevices() }
+        function onDevicesChanged()         { root.rebuildDevices() }
+        function onConnectedDevicesChanged(){ root.rebuildDevices() }
+        function onBluetoothOperationalChanged() { root.rebuildDevices() }
+    }
+    Component.onCompleted: rebuildDevices()
+
+    // ── Vista de detalles ────────────────────────────────────────────────
+    property bool showDetails: false
+    property var  connSince: ({})  // mac → Date de primera vez visto conectado
+    onExpandedChanged: if (!expanded) showDetails = false
+    readonly property var connectedDevs: devices.filter(function(d){ return d.connected })
+    function sinceText(mac) {
+        var d = connSince[mac]
+        if (!d) return "—"
+        var mins = Math.floor((Date.now() - d.getTime()) / 60000)
+        if (mins < 1) return tr("ahora mismo","just now")
+        if (mins < 60) return mins + " min"
+        var h = Math.floor(mins / 60)
+        return h + " h " + (mins % 60) + " min"
+    }
 
     // ── BookOS palette ───────────────────────────────────────────────────
     readonly property bool isDarkMode: {
@@ -133,23 +186,30 @@ PlasmoidItem {
     // FULL — popup
     // ═══════════════════════════════════════════════════════════════════════
     fullRepresentation: Item {
+        // altura según contenido, calculada aquí (no negociada con el contenedor)
+        readonly property int fixedH: root.showDetails
+            ? (root.connectedDevs.length > 0 ? Math.min(170 + root.connectedDevs.length * 265, 560) : 265)
+            : (!root.powered || root.devices.length === 0) ? 225
+            : 170 + Math.min(root.devices.length, 5) * 54 + 6
+        implicitWidth: 320
+        implicitHeight: fixedH
         Layout.minimumWidth: 320; Layout.preferredWidth: 320; Layout.maximumWidth: 320
-        Layout.minimumHeight:   popupCol.implicitHeight + 32
-        Layout.preferredHeight: popupCol.implicitHeight + 32
-        Layout.maximumHeight:   popupCol.implicitHeight + 32
+        Layout.minimumHeight: fixedH
+        Layout.preferredHeight: fixedH
+        Layout.maximumHeight: fixedH
 
         Rectangle { anchors.fill: parent; radius: 18; color: root.bg }
 
         property real entryOpacity: 0.0
         property real entryScale: 0.96
-        Component.onCompleted: { entryOpacity = 1.0; entryScale = 1.0; root.refresh() }
+        Component.onCompleted: { entryOpacity = 1.0; entryScale = 1.0; root.rebuildDevices() }
         opacity: entryOpacity; scale: entryScale
         Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
         Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
         ColumnLayout {
             id: popupCol
-            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
+            anchors { fill: parent; margins: 16 }
             spacing: 14
 
             // ── Header con toggle ────────────────────────────────────────
@@ -196,10 +256,10 @@ PlasmoidItem {
                 layer.enabled: true
                 layer.effect: MultiEffect { shadowEnabled: true; shadowColor: root.isDarkMode ? Qt.rgba(0,0,0,0.5) : Qt.rgba(0,0,0,0.13); shadowVerticalOffset: 2; shadowBlur: 0.4; autoPaddingEnabled: true }
                 implicitHeight: 48
-                visible: !root.powered || root.devices.length === 0
+                visible: !root.showDetails && (!root.powered || root.devices.length === 0)
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 12
-                    Image { width: 20; height: 20; sourceSize: Qt.size(40,40); smooth: true; source: root.icoBt(root.txt2, !root.powered) }
+                    Image { Layout.preferredWidth: 15; Layout.preferredHeight: 15; sourceSize: Qt.size(30,30); smooth: true; source: root.icoBt(root.txt2, !root.powered) }
                     PlasmaComponents.Label {
                         Layout.fillWidth: true
                         text: !root.powered ? root.tr("Bluetooth desactivado","Bluetooth off")
@@ -209,57 +269,140 @@ PlasmoidItem {
                 }
             }
 
+            // ── Vista de detalles (dispositivos conectados) ──────────────
+            Repeater {
+                model: root.showDetails ? root.connectedDevs : []
+                delegate: Rectangle {
+                    Layout.fillWidth: true; radius: 16
+                    color: root.card; border.width: 1; border.color: root.brdCol
+                    layer.enabled: true
+                    layer.effect: MultiEffect { shadowEnabled: true; shadowColor: root.isDarkMode ? Qt.rgba(0,0,0,0.5) : Qt.rgba(0,0,0,0.13); shadowVerticalOffset: 2; shadowBlur: 0.4; autoPaddingEnabled: true }
+                    implicitHeight: btDetCol.implicitHeight + 24
+                    ColumnLayout {
+                        id: btDetCol
+                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 12 }
+                        spacing: 8
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 12
+                            Rectangle {
+                                width: 36; height: 36; radius: 18; color: root.hi
+                                Image { anchors.centerIn: parent; width: 20; height: 20; sourceSize: Qt.size(40,40); smooth: true; source: root.icoDevice(modelData.type, "#FFFFFF") }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true; spacing: 1
+                                PlasmaComponents.Label { text: modelData.name; font.family: root.resolvedFont; font.pixelSize: 14; font.weight: Font.DemiBold; color: root.hi; Layout.fillWidth: true; elide: Text.ElideRight }
+                                PlasmaComponents.Label { text: root.tr("Conectado","Connected"); font.family: root.resolvedFont; font.pixelSize: 11; color: root.hi }
+                            }
+                            PlasmaComponents.Label { visible: modelData.pct > 0; text: modelData.pct + "%"; font.family: root.resolvedFont; font.pixelSize: 12; color: root.txt2 }
+                        }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: root.divCol }
+                        Repeater {
+                            model: [
+                                { l: "MAC",                                        v: modelData.mac },
+                                { l: root.tr("Batería","Battery"),                 v: modelData.pct > 0 ? modelData.pct + "%" : "—" },
+                                { l: root.tr("Tipo","Type"),                       v: modelData.type },
+                                { l: root.tr("Conectado desde hace","Connected for"), v: root.sinceText(modelData.mac) }
+                            ]
+                            delegate: RowLayout {
+                                Layout.fillWidth: true; spacing: 8
+                                PlasmaComponents.Label { text: modelData.l; font.family: root.resolvedFont; font.pixelSize: 11; color: root.txt2; Layout.preferredWidth: 120 }
+                                PlasmaComponents.Label { text: modelData.v; font.family: root.resolvedFont; font.pixelSize: 11; font.weight: Font.Medium; color: root.txt; Layout.fillWidth: true; elide: Text.ElideMiddle; horizontalAlignment: Text.AlignRight }
+                            }
+                        }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: root.divCol }
+                        Rectangle {
+                            Layout.fillWidth: true; Layout.preferredHeight: 34; radius: 17
+                            readonly property color red: root.isDarkMode ? "#FF453A" : "#FF3B30"
+                            color: btDiscM.containsMouse ? Qt.rgba(red.r, red.g, red.b, 0.16) : "transparent"
+                            border.width: 1; border.color: Qt.rgba(red.r, red.g, red.b, 0.4)
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            PlasmaComponents.Label { anchors.centerIn: parent; text: root.tr("Desconectar","Disconnect"); font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.DemiBold; color: parent.red }
+                            MouseArea { id: btDiscM; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: { root.toggleDevice(modelData); root.showDetails = false } }
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                visible: root.showDetails && root.connectedDevs.length === 0
+                Layout.fillWidth: true; radius: 16; implicitHeight: 48
+                color: root.card; border.width: 1; border.color: root.brdCol
+                PlasmaComponents.Label { anchors.centerIn: parent; text: root.tr("Nada conectado","Nothing connected"); font.family: root.resolvedFont; font.pixelSize: 13; color: root.txt2 }
+            }
+
             // ── Lista de dispositivos ────────────────────────────────────
             Rectangle {
-                visible: root.powered && root.devices.length > 0
-                Layout.fillWidth: true; radius: 16
+                visible: !root.showDetails && root.powered && root.devices.length > 0
+                Layout.fillWidth: true; Layout.fillHeight: true; radius: 16
                 color: root.card; border.width: 1; border.color: root.brdCol
                 layer.enabled: true
                 layer.effect: MultiEffect { shadowEnabled: true; shadowColor: root.isDarkMode ? Qt.rgba(0,0,0,0.5) : Qt.rgba(0,0,0,0.13); shadowVerticalOffset: 2; shadowBlur: 0.4; autoPaddingEnabled: true }
                 clip: true
-                implicitHeight: devCol.implicitHeight
+
+                Flickable {
+                    anchors.fill: parent
+                    contentHeight: devCol.implicitHeight
+                    clip: true
+                    interactive: devCol.implicitHeight > height
+                    boundsBehavior: Flickable.StopAtBounds
 
                 ColumnLayout {
                     id: devCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top }
+                    width: parent.width
                     spacing: 0
                     Repeater {
                         model: root.devices
                         delegate: Item {
                             Layout.fillWidth: true; Layout.preferredHeight: 54
                             Rectangle {
+                                visible: !modelData.connected
                                 anchors.fill: parent
                                 color: devMouse.containsMouse ? root.hovCol : "transparent"
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
+                            // tarjeta con borde azul para el dispositivo conectado (mockup)
                             Rectangle {
-                                visible: index < root.devices.length - 1 && !devMouse.containsMouse
+                                visible: modelData.connected
+                                anchors { fill: parent; leftMargin: 8; rightMargin: 8; topMargin: 5; bottomMargin: 5 }
+                                radius: 12
+                                color: Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.10 : 0.05)
+                                border.width: 1.5; border.color: root.hi
+                            }
+                            Rectangle {
+                                visible: index < root.devices.length - 1 && !devMouse.containsMouse && !modelData.connected
                                 anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 16; rightMargin: 16 }
                                 height: 1; color: root.divCol; z: 2
                             }
                             RowLayout {
-                                anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 12
+                                anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 18; spacing: 11
                                 Rectangle {
-                                    width: 36; height: 36; radius: 18
+                                    Layout.preferredWidth: 30; Layout.preferredHeight: 30; radius: 9
                                     color: modelData.connected ? root.hi : (root.isDarkMode ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06))
                                     Image {
-                                        anchors.centerIn: parent; width: 20; height: 20
-                                        sourceSize: Qt.size(40,40); smooth: true
+                                        anchors.centerIn: parent; width: 16; height: 16
+                                        sourceSize: Qt.size(32,32); smooth: true
                                         source: root.icoDevice(modelData.type, modelData.connected ? "#FFFFFF" : root.txt)
                                     }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 1
                                     PlasmaComponents.Label {
-                                        text: modelData.name; font.family: root.resolvedFont; font.pixelSize: 14
-                                        font.weight: Font.Medium; color: root.txt
+                                        text: modelData.name; font.family: root.resolvedFont; font.pixelSize: 13
+                                        font.weight: modelData.connected ? Font.DemiBold : Font.Medium
+                                        color: modelData.connected ? root.hi : root.txt
                                         Layout.fillWidth: true; elide: Text.ElideRight
                                     }
                                     PlasmaComponents.Label {
-                                        text: modelData.connected ? (modelData.pct > 0 ? root.tr("Conectado · ","Connected · ") + modelData.pct + "%" : root.tr("Conectado","Connected")) : root.tr("Emparejado","Paired")
-                                        font.family: root.resolvedFont; font.pixelSize: 11
+                                        text: modelData.connected ? root.tr("Conectado","Connected") : root.tr("Emparejado","Paired")
+                                        font.family: root.resolvedFont; font.pixelSize: 10
                                         color: modelData.connected ? root.hi : root.txt2
                                     }
+                                }
+                                PlasmaComponents.Label {
+                                    visible: modelData.connected && modelData.pct > 0
+                                    text: modelData.pct + "%"
+                                    font.family: root.resolvedFont; font.pixelSize: 11; font.weight: Font.DemiBold
+                                    color: root.hi
                                 }
                             }
                             MouseArea {
@@ -269,10 +412,27 @@ PlasmoidItem {
                         }
                     }
                 }
+                }
             }
 
-            // ── Footer ───────────────────────────────────────────────────
-            BookButton { label: root.tr("Ajustes","Settings"); iconFn: root.icoSettings; onClicked: root.openSettings("bluetooth") }
+            // relleno cuando no está la lista (detalles / vacío): footer pegado abajo
+            Item {
+                visible: root.showDetails || !root.powered || root.devices.length === 0
+                Layout.fillHeight: true
+            }
+
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: -6; height: 1; color: root.divCol }
+
+            // ── Footer: Details / Configuration ─────────────────────────
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                BookButton {
+                    label: root.showDetails ? root.tr("Volver","Back") : root.tr("Detalles","Details")
+                    enabled: root.showDetails || root.connectedCount > 0
+                    onClicked: root.showDetails = !root.showDetails
+                }
+                BookButton { label: root.tr("Configuración","Configuration"); onClicked: root.openSettings("bluetooth") }
+            }
         }
     }
 
@@ -283,25 +443,19 @@ PlasmoidItem {
         property bool enabled: true
         signal clicked
         readonly property bool hov: btnMouse.containsMouse
-        readonly property color fg: hov ? root.hi : root.txt
-        Layout.fillWidth: true; Layout.preferredHeight: 38
-        radius: height / 2
+        Layout.fillWidth: true; Layout.preferredHeight: 34
+        radius: 11
         opacity: enabled ? 1.0 : 0.4
-        color: hov ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12)
-                   : (root.isDarkMode ? Qt.rgba(1,1,1,0.07) : Qt.rgba(0,0,0,0.05))
-        border.width: 1
-        border.color: hov ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, 0.40) : "transparent"
+        color: hov ? (root.isDarkMode ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.045)) : root.card
+        border.width: 1; border.color: root.brdCol
         Behavior on color { ColorAnimation { duration: 130 } }
         scale: btnMouse.pressed ? 0.97 : 1.0
         Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
-        RowLayout {
-            anchors.centerIn: parent; spacing: 7
-            Image {
-                visible: bookBtn.iconFn !== null
-                width: 15; height: 15; sourceSize: Qt.size(30,30); smooth: true
-                source: bookBtn.iconFn ? bookBtn.iconFn(bookBtn.fg) : ""
-            }
-            PlasmaComponents.Label { text: bookBtn.label; font.family: root.resolvedFont; font.pixelSize: 13; font.weight: Font.DemiBold; color: bookBtn.fg }
+        PlasmaComponents.Label {
+            anchors.centerIn: parent
+            text: bookBtn.label
+            font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.DemiBold
+            color: root.txt
         }
         MouseArea {
             id: btnMouse; anchors.fill: parent; hoverEnabled: bookBtn.enabled
@@ -314,73 +468,42 @@ PlasmoidItem {
     // ACCIONES
     // ═══════════════════════════════════════════════════════════════════════
     function togglePower() {
-        // rfkill y no `bluetoothctl power`: systemd-rfkill persiste el
-        // soft-block entre reinicios; con power off, AutoEnable de bluez
-        // lo volvía a encender en cada arranque.
         var turnOn = !root.powered
-        root.powered = turnOn
-        cmd.run(turnOn ? "sh -c 'rfkill unblock bluetooth; bluetoothctl power on'"
-                       : "rfkill block bluetooth")
-        listTimer.restart()
+        // bloqueo rfkill vía BlueZ (persiste) + encender/apagar adaptadores
+        BluezQt.Manager.bluetoothBlocked = !turnOn
+        var ads = BluezQt.Manager.adapters || []
+        for (var i = 0; i < ads.length; i++) ads[i].powered = turnOn
+        if (turnOn) scanStopTimer.stop()
     }
     function toggleDevice(d) {
-        if (!d.mac) return
-        var action = d.connected ? "disconnect" : "connect"
-        cmd.run("bluetoothctl " + action + " " + d.mac)
-        listTimer.restart()
+        if (!d || !d.dev) return
+        if (d.dev.connected) d.dev.disconnectFromDevice()
+        else                 d.dev.connectToDevice()
     }
     function scan() {
         if (!root.powered) return
+        var ads = BluezQt.Manager.adapters || []
+        for (var i = 0; i < ads.length; i++) {
+            if (!ads[i].discovering) ads[i].startDiscovery()
+        }
         root.scanning = true
-        cmd.run("sh -c 'timeout 6 bluetoothctl --timeout 6 scan on >/dev/null 2>&1'")
         scanStopTimer.restart()
+    }
+    function stopScan() {
+        var ads = BluezQt.Manager.adapters || []
+        for (var i = 0; i < ads.length; i++) {
+            if (ads[i].discovering) ads[i].stopDiscovery()
+        }
+        root.scanning = false
     }
     function openSettings(page) {
         root.expanded = false
         cmd.run("sh -c 'echo " + page + " > /tmp/bookos-start-page; gtk-launch bookos-settings.desktop 2>/dev/null || bookos-settings'")
     }
-    function refresh() { stateSource.refresh(); listSource.refresh() }
 
-    Timer { id: listTimer;     interval: 1500; onTriggered: root.refresh() }
-    Timer { id: scanStopTimer; interval: 6500; onTriggered: { root.scanning = false; root.refresh() } }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // DATA SOURCES
-    // ═══════════════════════════════════════════════════════════════════════
-    Plasma5Support.DataSource {
-        id: stateSource; engine: "executable"
-        connectedSources: ["sh -c 'bluetoothctl show 2>/dev/null | grep -i \"Powered:\" | head -n1 | grep -qi yes && echo on || echo off'"]
-        interval: root.popupOpen ? 4000 : 0
-        function refresh() { disconnectSource(connectedSources[0]); connectSource(connectedSources[0]) }
-        onNewData: (s, data) => { if (data["stdout"]) root.powered = data["stdout"].trim() === "on" }
-    }
-
-    Plasma5Support.DataSource {
-        id: listSource; engine: "executable"
-        connectedSources: root.popupOpen ? [
-            "sh -c 'for mac in $(bluetoothctl devices 2>/dev/null | awk \"{print \\$2}\"); do " +
-            "  info=$(bluetoothctl info \"$mac\" 2>/dev/null); " +
-            "  name=$(echo \"$info\" | grep -i \"Name:\" | head -n1 | sed \"s/.*Name: //\"); " +
-            "  [ -z \"$name\" ] && continue; " +
-            "  conn=$(echo \"$info\" | grep -i \"Connected:\" | grep -qi yes && echo 1 || echo 0); " +
-            "  mu=$(echo \"$mac\" | tr \":\" \"_\"); " +
-            "  pct=$(upower -i $(upower -e 2>/dev/null | grep -i \"$mu\" | head -n1) 2>/dev/null | grep -i percentage | awk \"{print \\$2}\" | tr -d \"%\"); " +
-            "  echo \"${conn}|${pct:-0}|${mac}|${name}\"; " +
-            "done | sort -r'"
-        ] : []
-        interval: root.popupOpen ? 6000 : 0
-        function refresh() { if (connectedSources.length) { disconnectSource(connectedSources[0]); connectSource(connectedSources[0]) } }
-        onNewData: (s, data) => {
-            if (!data["stdout"]) { root.devices = []; return }
-            var lines = data["stdout"].trim().split('\n').filter(function(l){ return l.includes("|") })
-            root.devices = lines.map(function(l){
-                var p = l.split("|")
-                var name = p.slice(3).join("|").trim()
-                return { connected: p[0].trim() === "1", pct: parseInt(p[1].trim()) || 0,
-                         mac: p[2].trim(), name: name, type: root.devType(name) }
-            }).filter(function(d){ return d.name !== "" })
-        }
-    }
+    // descubrir automáticamente al abrir el popup; parar al cerrar
+    onPopupOpenChanged: { if (popupOpen) scan(); else stopScan() }
+    Timer { id: scanStopTimer; interval: 12000; onTriggered: root.stopScan() }
 
     Plasma5Support.DataSource {
         id: cmd; engine: "executable"; connectedSources: []

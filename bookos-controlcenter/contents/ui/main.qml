@@ -247,6 +247,167 @@ PlasmoidItem {
         return m + ":" + (ss < 10 ? "0" : "") + ss
     }
 
+    // ── BookOS-Link: música del móvil (KDE Connect mprisremote vía busctl) ──
+    // Reproductor del teléfono expuesto por kdeconnectd. Se controla con el
+    // script bookos-link-media.sh (busctl). Tiempos del móvil van en ms.
+    readonly property string linkScript:
+        Qt.resolvedUrl("bookos-link-media.sh").toString().replace(/^file:\/\//, "")
+    property bool   phoneAvail:   false
+    property string phoneId:      ""
+    property string phoneDev:     ""
+    property bool   phonePlaying: false
+    property string phoneTitle:   ""
+    property string phoneArtist:  ""
+    property string phoneAlbum:   ""
+    property real   phoneLenMs:   0
+    property real   phonePosMs:   0
+    property bool   phoneCanSeek: false
+    property string phoneArt:     ""
+
+    function phonePoll() { linkMedia.run("sh '" + root.linkScript + "' status") }
+    function phoneAction(a) {
+        cmd.run("sh '" + root.linkScript + "' action " + a)
+        // eco optimista + refresco rápido para que la UI responda al instante
+        if (a === "PlayPause") root.phonePlaying = !root.phonePlaying
+        phonePollSoon.restart()
+    }
+    function phoneSeek(frac) {
+        var ms = Math.round(Math.min(1, Math.max(0, frac)) * root.phoneLenMs)
+        cmd.run("sh '" + root.linkScript + "' position " + ms)
+        root.phonePosMs = ms            // eco optimista
+        phonePollSoon.restart()
+    }
+    Timer { id: phonePollSoon; interval: 350; repeat: false; onTriggered: root.phonePoll() }
+    Timer {
+        running: root.popupOpen; interval: 2500; repeat: true
+        triggeredOnStart: true
+        onTriggered: root.phonePoll()
+    }
+    Plasma5Support.DataSource {
+        id: linkMedia; engine: "executable"; connectedSources: []
+        function run(c) { connectSource(c) }
+        onNewData: (s, data) => {
+            disconnectSource(s)
+            var out = data["stdout"] || ""
+            var m = {}
+            out.trim().split('\n').forEach(function(l) {
+                var i = l.indexOf('='); if (i < 0) return
+                m[l.substring(0, i)] = l.substring(i + 1)
+            })
+            root.phoneAvail = m["AVAIL"] === "1"
+            if (!root.phoneAvail) { root.phonePlaying = false; root.phoneTitle = ""; return }
+            root.phoneId      = m["ID"]      || ""
+            root.phoneDev     = m["DEV"]     || ""
+            root.phonePlaying = m["PLAYING"] === "true"
+            root.phoneTitle   = m["TITLE"]   || ""
+            root.phoneArtist  = m["ARTIST"]  || ""
+            root.phoneAlbum   = m["ALBUM"]   || ""
+            root.phoneLenMs   = parseInt(m["LENGTH"] || "0") || 0
+            root.phonePosMs   = parseInt(m["POS"]    || "0") || 0
+            root.phoneCanSeek = m["CANSEEK"] === "true"
+            // localAlbumArtUrl puede venir como ruta o como file:// — normalizar a url
+            var a = m["ART"] || ""
+            root.phoneArt = a === "" ? "" : (a.indexOf("://") >= 0 ? a : "file://" + a)
+        }
+    }
+
+    // ── Fuente unificada: teléfono cuando suena/está disponible, si no, local ─
+    readonly property bool   usePhone:  phoneAvail && (phonePlaying || !hasMusic)
+    // Fallback de portada para música LOCAL cuya app no expone artUrl
+    // (p. ej. plasma-browser-integration / YouTube). Vía bookos-link-media.sh localart.
+    property string localArt: ""
+    onSongTitleChanged: root.localArt = ""
+    Timer {
+        running: root.popupOpen && !root.usePhone && root.hasMusic && root.artUrl === ""
+        interval: 2000; repeat: true; triggeredOnStart: true
+        onTriggered: linkLocalArt.run("sh '" + root.linkScript + "' localart")
+    }
+    Plasma5Support.DataSource {
+        id: linkLocalArt; engine: "executable"; connectedSources: []
+        function run(c) { connectSource(c) }
+        onNewData: (s, data) => {
+            disconnectSource(s)
+            var a = (data["stdout"] || "").trim()
+            root.localArt = (a.indexOf("file://") === 0 || a.indexOf("http") === 0) ? a : ""
+        }
+    }
+
+    readonly property bool   uHasMusic: hasMusic || phoneAvail
+    readonly property string uTitle:    usePhone ? phoneTitle  : songTitle
+    readonly property string uArtist:   usePhone ? phoneArtist : songArtist
+    readonly property string uApp:      usePhone ? (phoneDev !== "" ? phoneDev : tr("Teléfono","Phone"))
+                                                 : (appName !== "" ? appName : tr("Reproductor","Media player"))
+    // portada del móvil; si es local y el player no expone art, usa el fallback local
+    readonly property string uArt:      usePhone ? phoneArt : (artUrl !== "" ? artUrl : localArt)
+    readonly property bool   uPlaying:  usePhone ? phonePlaying : isPlaying
+    readonly property real   uLen:      usePhone ? phoneLenMs * 1000 : songLen
+    readonly property real   uPos:      usePhone ? phonePosMs * 1000 : songPos
+    readonly property bool   uCanSeek:  usePhone ? phoneCanSeek : (hasMusic && (player.canSeek || false))
+    // color dinámico de la portada (mismo algoritmo que la Now Bar / bookbar)
+    readonly property color  uTint:     uHasMusic ? artAccent : "#12131a"
+
+    // ── Extracción de color de la portada (idéntico a com.bookos.bookbar) ──
+    property color artAccent: "#12131a"
+    property int   artTick: 0
+    onUArtChanged: {
+        if (uArt === "") { artAccent = "#12131a" }
+        else { artTick++; artColorRetry.restart() }
+    }
+    Timer {
+        id: artColorRetry; interval: 200; repeat: false
+        onTriggered: {
+            if (artThumb.status === Image.Ready) colorCanvas.requestPaint()
+            else if (artThumb.status === Image.Error) root.artAccent = "#12131a"
+        }
+    }
+    Image {
+        id: artThumb; visible: false; width: 16; height: 16
+        cache: false; asynchronous: true; fillMode: Image.Stretch
+        source: root.uArt === "" ? "" : root.uArt + (root.uArt.indexOf("#") < 0 ? "#" : "&") + "t=" + root.artTick
+        onStatusChanged: {
+            if (status === Image.Ready) colorCanvas.requestPaint()
+            else if (status === Image.Error) root.artAccent = "#12131a"
+        }
+    }
+    Canvas {
+        id: colorCanvas; visible: false; width: 16; height: 16
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.drawImage(artThumb, 0, 0, 16, 16)
+            var d = ctx.getImageData(0, 0, 16, 16).data
+            var best = null, bestScore = -1
+            for (var i = 0; i < 256; i++) {
+                var r = d[i*4], g = d[i*4+1], b = d[i*4+2]
+                var mx = Math.max(r, g, b), mn = Math.min(r, g, b)
+                if (mx === 0) continue
+                var sat = (mx - mn) / mx
+                var lum = (0.299*r + 0.587*g + 0.114*b) / 255
+                if (lum < 0.12 || lum > 0.92) continue
+                var score = sat * (1 - Math.abs(lum - 0.55) * 0.9)
+                if (score > bestScore) { bestScore = score; best = [r, g, b] }
+            }
+            if (!best) { root.artAccent = "#12131a"; return }
+            var br = best[0], bg = best[1], bb0 = best[2]
+            var mxx = Math.max(br, bg, bb0)
+            var f  = mxx > 0 ? 190 / mxx : 1
+            var rr = Math.min(255, br * f), gg = Math.min(255, bg * f), bb = Math.min(255, bb0 * f)
+            var bMix = (0.299*rr + 0.587*gg + 0.114*bb) / 255
+            if (bMix > 0.75) { rr *= 0.78; gg *= 0.78; bb *= 0.78 }
+            root.artAccent = Qt.rgba(rr/255, gg/255, bb/255, 1)
+        }
+    }
+    function uPrev()      { if (usePhone) phoneAction("Previous"); else if (hasMusic) player.Previous() }
+    function uNext()      { if (usePhone) phoneAction("Next");     else if (hasMusic) player.Next() }
+    function uPlayPause() { if (usePhone) phoneAction("PlayPause"); else if (hasMusic) player.PlayPause() }
+    function uSeek(frac)  { if (usePhone) phoneSeek(frac); else root.seek(frac) }
+    // avance suave del progreso del móvil entre sondeos (cada 2.5 s)
+    Timer {
+        running: root.usePhone && root.phonePlaying && root.popupOpen
+        interval: 1000; repeat: true
+        onTriggered: if (root.phoneLenMs > 0)
+            root.phonePosMs = Math.min(root.phoneLenMs, root.phonePosMs + 1000)
+    }
+
     // ── DND ──────────────────────────────────────────────────────────────
     NotificationManager.Settings { id: notifSettings }
     function computeDnd() {
@@ -883,56 +1044,93 @@ PlasmoidItem {
         Component {
             id: mediaComp
             Rectangle {
-                visible: root.hasMusic
+                visible: root.uHasMusic
                 Layout.fillWidth: true
-                implicitHeight: root.hasMusic ? 150 : 0
+                implicitHeight: root.uHasMusic ? 150 : 0
                 radius: 24; clip: true
                 color: "#1b1d22"
-                Image { id: artBg; anchors.fill: parent; visible: false; source: root.artUrl; fillMode: Image.PreserveAspectCrop; asynchronous: true }
-                FastBlur { anchors.fill: parent; source: artBg; radius: 80; visible: root.artUrl !== "" }
-                Rectangle { anchors.fill: parent; color: Qt.rgba(0,0,0, root.artUrl !== "" ? 0.42 : 0.0) }
+                // Portada difuminada de fondo, enmascarada con esquinas redondeadas
+                // (clip es rectangular y dejaba las esquinas cuadradas).
+                Item {
+                    id: artWrap
+                    anchors.fill: parent
+                    visible: root.uArt !== ""
+                    layer.enabled: true
+                    layer.effect: OpacityMask {
+                        maskSource: Rectangle { width: artWrap.width; height: artWrap.height; radius: 24 }
+                    }
+                    // portada nítida (sin blur)
+                    Image { id: artBg; anchors.fill: parent; source: root.uArt; fillMode: Image.PreserveAspectCrop; asynchronous: true }
+                    // tinte dinámico con el color de la portada (estilo One UI):
+                    // lavado radial suave para cohesión de color
+                    RadialGradient {
+                        anchors.fill: parent
+                        horizontalRadius: width * 0.85; verticalRadius: height * 0.85
+                        gradient: Gradient {
+                            GradientStop { position: 0.35; color: "transparent" }
+                            GradientStop { position: 1.0;  color: Qt.rgba(root.uTint.r, root.uTint.g, root.uTint.b, 0.45) }
+                        }
+                    }
+                    // scrim vertical tintado: arriba para el texto, abajo para los controles
+                    Rectangle {
+                        anchors.fill: parent
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Qt.rgba(root.uTint.r, root.uTint.g, root.uTint.b, 0.55) }
+                            GradientStop { position: 0.40; color: Qt.rgba(root.uTint.r, root.uTint.g, root.uTint.b, 0.10) }
+                            GradientStop { position: 0.72; color: Qt.rgba(root.uTint.r, root.uTint.g, root.uTint.b, 0.34) }
+                            GradientStop { position: 1.0; color: Qt.rgba(Qt.darker(root.uTint, 2.2).r, Qt.darker(root.uTint, 2.2).g, Qt.darker(root.uTint, 2.2).b, 0.82) }
+                        }
+                    }
+                }
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 14
                     spacing: 3
                     RowLayout {
                         Layout.fillWidth: true; spacing: 7
-                        Rectangle { width: 8; height: 8; radius: 4; color: "#FFFFFF"; opacity: 0.85 }
+                        // teléfono → icono de móvil; local → punto blanco
+                        Image {
+                            visible: root.usePhone; width: 9; height: 9
+                            sourceSize: Qt.size(20, 20); smooth: true
+                            source: root.ico("phone", "#FFFFFF"); opacity: 0.9
+                        }
+                        Rectangle { visible: !root.usePhone; width: 8; height: 8; radius: 4; color: "#FFFFFF"; opacity: 0.85 }
                         PlasmaComponents.Label {
                             Layout.fillWidth: true; elide: Text.ElideRight
-                            text: root.appName !== "" ? root.appName : "Reproductor"
+                            text: root.uApp
                             font.family: root.resolvedFont; font.pixelSize: 11; color: "#FFFFFF"; opacity: 0.85
                         }
                     }
                     PlasmaComponents.Label {
                         Layout.fillWidth: true; elide: Text.ElideRight
-                        text: root.songTitle !== "" ? root.songTitle : root.tr("Sin reproducción","Nothing playing")
+                        text: root.uTitle !== "" ? root.uTitle : root.tr("Sin reproducción","Nothing playing")
                         font.family: root.resolvedFont; font.pixelSize: 15; font.weight: Font.Bold; color: "#FFFFFF"
                     }
                     PlasmaComponents.Label {
-                        Layout.fillWidth: true; elide: Text.ElideRight; visible: root.songArtist !== ""
-                        text: root.songArtist; font.family: root.resolvedFont; font.pixelSize: 12; color: "#FFFFFF"; opacity: 0.8
+                        Layout.fillWidth: true; elide: Text.ElideRight; visible: root.uArtist !== ""
+                        text: root.uArtist; font.family: root.resolvedFont; font.pixelSize: 12; color: "#FFFFFF"; opacity: 0.8
                     }
                     Item { Layout.fillHeight: true }
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 8; visible: root.songLen > 0
-                        PlasmaComponents.Label { text: root.fmtTime(root.songPos); font.family: root.resolvedFont; font.pixelSize: 10; color: "#FFFFFF"; opacity: 0.8 }
+                        Layout.fillWidth: true; spacing: 8; visible: root.uLen > 0
+                        PlasmaComponents.Label { text: root.fmtTime(root.uPos); font.family: root.resolvedFont; font.pixelSize: 10; color: "#FFFFFF"; opacity: 0.8 }
                         Item {
                             Layout.fillWidth: true; Layout.preferredHeight: 14
                             Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 4; radius: 2; color: Qt.rgba(1,1,1,0.30) }
                             Rectangle { anchors.verticalCenter: parent.verticalCenter; height: 4; radius: 2; color: "#FFFFFF"
-                                width: parent.width * (root.songLen > 0 ? Math.min(1, root.songPos / root.songLen) : 0) }
+                                width: parent.width * (root.uLen > 0 ? Math.min(1, root.uPos / root.uLen) : 0) }
                             Rectangle { width: 11; height: 11; radius: 5.5; color: "#FFFFFF"; anchors.verticalCenter: parent.verticalCenter
-                                x: (parent.width - width) * (root.songLen > 0 ? Math.min(1, root.songPos / root.songLen) : 0) }
-                            MouseArea { anchors.fill: parent; enabled: root.hasMusic && (root.player.canSeek || false)
-                                onClicked: (m) => root.seek(Math.min(1, Math.max(0, m.x / width))) }
+                                x: (parent.width - width) * (root.uLen > 0 ? Math.min(1, root.uPos / root.uLen) : 0) }
+                            MouseArea { anchors.fill: parent; enabled: root.uCanSeek
+                                cursorShape: root.uCanSeek ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: (m) => root.uSeek(Math.min(1, Math.max(0, m.x / width))) }
                         }
-                        PlasmaComponents.Label { text: root.fmtTime(root.songLen); font.family: root.resolvedFont; font.pixelSize: 10; color: "#FFFFFF"; opacity: 0.8 }
+                        PlasmaComponents.Label { text: root.fmtTime(root.uLen); font.family: root.resolvedFont; font.pixelSize: 10; color: "#FFFFFF"; opacity: 0.8 }
                     }
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter; spacing: 26
-                        MediaBtn { iconSrc: root.icoPrev("#FFFFFF"); size: 24; onActivated: { if (root.hasMusic) root.player.Previous() } }
-                        MediaBtn { iconSrc: root.isPlaying ? root.icoPause("#FFFFFF") : root.icoPlay("#FFFFFF"); size: 30; onActivated: { if (root.hasMusic) root.player.PlayPause() } }
-                        MediaBtn { iconSrc: root.icoNext("#FFFFFF"); size: 24; onActivated: { if (root.hasMusic) root.player.Next() } }
+                        MediaBtn { iconSrc: root.icoPrev("#FFFFFF"); size: 24; onActivated: root.uPrev() }
+                        MediaBtn { iconSrc: root.uPlaying ? root.icoPause("#FFFFFF") : root.icoPlay("#FFFFFF"); size: 30; onActivated: root.uPlayPause() }
+                        MediaBtn { iconSrc: root.icoNext("#FFFFFF"); size: 24; onActivated: root.uNext() }
                     }
                 }
             }

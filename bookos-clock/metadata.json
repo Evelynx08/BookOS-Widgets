@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{ "Name": "Evelyn" }],
+        "Icon": "clock",
+        "Id": "bookos-clock",
+        "Name": "BookOS Reloj y Calendario",
+        "Name[es]": "BookOS Reloj y Calendario",
+        "Description": "Reloj y calendario con eventos y estética BookOS",
+        "Description[es]": "Reloj y calendario con eventos y estética BookOS",
+        "Version": "1.0",
+        "Category": "Date and Time",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

@@ -123,13 +123,31 @@ PlasmoidItem {
             anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
             spacing: 16
 
-            PlasmaComponents.Label {
-                text: root.tr("Sonido","Sound")
-                font.family: root.resolvedFont; font.weight: Font.Bold
-                font.pixelSize: 18; font.letterSpacing: -0.3
-                color: root.txt
+            RowLayout {
                 Layout.fillWidth: true
                 Layout.bottomMargin: -2
+                PlasmaComponents.Label {
+                    text: root.tr("Sonido","Sound")
+                    font.family: root.resolvedFont; font.weight: Font.Bold
+                    font.pixelSize: 18; font.letterSpacing: -0.3
+                    color: root.txt
+                    Layout.fillWidth: true
+                }
+                Rectangle {
+                    Layout.preferredHeight: 26; Layout.preferredWidth: sndCfgTxt.implicitWidth + 22
+                    radius: 13
+                    color: sndCfgM.containsMouse ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12)
+                                                  : (root.isDarkMode ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0,0,0,0.06))
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    PlasmaComponents.Label {
+                        id: sndCfgTxt; anchors.centerIn: parent
+                        text: "Config"
+                        font.family: root.resolvedFont; font.pixelSize: 12; font.weight: Font.DemiBold
+                        color: sndCfgM.containsMouse ? root.hi : root.txt
+                    }
+                    MouseArea { id: sndCfgM; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: { root.expanded = false; root.openSettings("sonido") } }
+                }
             }
 
             // ── Salida ───────────────────────────────────────────────────
@@ -194,28 +212,6 @@ PlasmoidItem {
                 }
             }
 
-            // ── Footer ───────────────────────────────────────────────────
-            Rectangle {
-                id: settBtn
-                readonly property bool hov: settMouse.containsMouse
-                readonly property color fg: hov ? root.hi : root.txt
-                Layout.fillWidth: true; Layout.preferredHeight: 38
-                radius: height / 2
-                color: hov ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, root.isDarkMode ? 0.18 : 0.12)
-                           : (root.isDarkMode ? Qt.rgba(1,1,1,0.07) : Qt.rgba(0,0,0,0.05))
-                border.width: 1
-                border.color: hov ? Qt.rgba(root.hi.r, root.hi.g, root.hi.b, 0.40) : "transparent"
-                Behavior on color { ColorAnimation { duration: 130 } }
-                scale: settMouse.pressed ? 0.97 : 1.0
-                Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
-                RowLayout {
-                    anchors.centerIn: parent; spacing: 7
-                    Image { width: 15; height: 15; sourceSize: Qt.size(30,30); smooth: true; source: root.icoSettings(settBtn.fg) }
-                    PlasmaComponents.Label { text: root.tr("Ajustes de sonido","Sound settings"); font.family: root.resolvedFont; font.pixelSize: 13; font.weight: Font.DemiBold; color: settBtn.fg }
-                }
-                MouseArea { id: settMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: { root.expanded = false; root.openSettings("sonido") } }
-            }
         }
     }
 

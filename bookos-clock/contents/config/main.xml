@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="dateFormat" type="String">
+            <default>d/M/yy</default>
+        </entry>
+        <entry name="use24h" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="showSeconds" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="fontFamily" type="String">
+            <default></default>
+        </entry>
+        <entry name="fontSize" type="Int">
+            <default>14</default>
+        </entry>
+        <entry name="clockWeight" type="Int">
+            <default>3</default>
+        </entry>
+        <entry name="eventsJson" type="String">
+            <default>[]</default>
+        </entry>
+    </group>
+</kcfg>
