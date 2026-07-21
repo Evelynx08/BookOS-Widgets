@@ -27,6 +27,18 @@ Lib.Card {
     readonly property bool hasMedia: mediaPlayerPage.track
         || (mediaPlayerPage.playbackStatus > Mpris.PlaybackStatus.Stopped)
 
+    // Show a way to switch player right on the compact card when more than
+    // one real MPRIS source is active (mpris2Model also carries a
+    // "multiplexer" aggregate row, hence the +2 threshold — mirrors the
+    // TabBar visibility rule in MediaPlayerPage.qml).
+    readonly property int playerCount: mediaPlayerPage.mpris2Model.count
+    readonly property bool hasMultiplePlayers: playerCount > 2
+    function cyclePlayer(delta) {
+        if (playerCount <= 0) return;
+        var next = (mediaPlayerPage.mpris2Model.currentIndex + delta + playerCount) % playerCount;
+        mediaPlayerPage.mpris2Model.currentIndex = next;
+    }
+
     // Audio output device for the "playing on …" line.
     readonly property var sink: Vol.PreferredDevice.sink
     readonly property string deviceName: sink && sink.description ? sink.description : i18n("Internal Speakers")
@@ -116,6 +128,47 @@ Lib.Card {
                 opacity: 0.9
                 font.pixelSize: root.smallFontSize
                 elide: Text.ElideRight
+            }
+
+            // Quick switch between active players, without opening the full page.
+            RowLayout {
+                visible: mediaPlayer.hasMultiplePlayers
+                spacing: 2
+                PlasmaComponents.ToolButton {
+                    icon.name: "arrow-left"
+                    icon.color: mediaPlayer.fg
+                    implicitWidth: root.mediumFontSize * 1.6
+                    implicitHeight: implicitWidth
+                    onClicked: mediaPlayer.cyclePlayer(-1)
+                }
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignVCenter
+                    Repeater {
+                        model: mediaPlayer.playerCount
+                        delegate: Rectangle {
+                            required property int index
+                            readonly property bool active: index === mediaPlayerPage.mpris2Model.currentIndex
+                            width: active ? 12 : 6
+                            height: 6
+                            radius: 3
+                            color: mediaPlayer.fg
+                            opacity: active ? 0.95 : 0.4
+                            Behavior on width { NumberAnimation { duration: 150 } }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: mediaPlayerPage.mpris2Model.currentIndex = index
+                            }
+                        }
+                    }
+                }
+                PlasmaComponents.ToolButton {
+                    icon.name: "arrow-right"
+                    icon.color: mediaPlayer.fg
+                    implicitWidth: root.mediumFontSize * 1.6
+                    implicitHeight: implicitWidth
+                    onClicked: mediaPlayer.cyclePlayer(1)
+                }
             }
         }
 

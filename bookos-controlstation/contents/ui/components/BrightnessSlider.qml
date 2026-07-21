@@ -54,6 +54,28 @@ Item {
         isSilent: false
     }
 
+    // The backend flips isBrightnessAvailable to false transiently (DDC/CI
+    // detection races, DPMS changes, external monitor hotplug) which made the
+    // whole row blink out. Debounce the "unavailable" state so a brief glitch
+    // doesn't hide the slider; only hide after it stays unavailable for real.
+    property bool debouncedAvailable: sbControl.isBrightnessAvailable
+    Timer {
+        id: unavailableDebounce
+        interval: 3000
+        onTriggered: brightnessControl.debouncedAvailable = false
+    }
+    Connections {
+        target: sbControl
+        function onIsBrightnessAvailableChanged() {
+            if (sbControl.isBrightnessAvailable) {
+                unavailableDebounce.stop();
+                brightnessControl.debouncedAvailable = true;
+            } else {
+                unavailableDebounce.restart();
+            }
+        }
+    }
+
     Connections {
         id: displayModelConnections
         target: sbControl.displays
@@ -82,7 +104,7 @@ Item {
         function onRowsRemoved() { update(); }
     }
 
-    visible: sbControl.isBrightnessAvailable && root.showBrightness
+    visible: debouncedAvailable && root.showBrightness
     
     Loader {
         id: sliderLoader
