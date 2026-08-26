@@ -18,6 +18,7 @@ Kirigami.FormLayout {
     property alias cfg_alphaSort:  alphaSortCheck.checked
     property alias cfg_darkTheme:  darkThemeCheck.checked
     property alias cfg_blurRadius: blurSlider.value
+    property alias cfg_useWallpaperBg: wallpaperBgCheck.checked
     property alias cfg_appNameFormat: appNameFormatCombo.currentIndex
     property alias cfg_scrollMode: scrollModeHolder.text
 
@@ -81,6 +82,13 @@ Kirigami.FormLayout {
         id: darkThemeCheck
         Kirigami.FormData.label: i18n("Dark theme:")
         checked: true
+    }
+
+    CheckBox {
+        id: wallpaperBgCheck
+        Kirigami.FormData.label: i18n("Wallpaper background:")
+        text: i18n("Use the desktop wallpaper, blurred")
+        checked: false
     }
 
     RowLayout {

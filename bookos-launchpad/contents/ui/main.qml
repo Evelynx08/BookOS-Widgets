@@ -46,6 +46,15 @@ PlasmoidItem {
         Layout.preferredWidth: implicitWidth
         Layout.preferredHeight: implicitHeight
 
+        // BookOS: mismo gesto que el dock (icontasks) — reposo a tamano natural
+        // y un aumento discreto con el cursor encima, para que el boton del
+        // Launchpad se comporte igual que el resto de iconos.
+        readonly property real magnifyMax: (Plasmoid.configuration.magnifyEnabled && Plasmoid.configuration.magnifyScale > 1)
+            ? Plasmoid.configuration.magnifyScale : 1
+        readonly property real magnifyScaleNow: mouseArea.pressed
+            ? 0.85
+            : (mouseArea.containsMouse ? magnifyMax : 1.0)
+
         Image {
             id: launchIconImage
             anchors.fill: parent
@@ -56,7 +65,7 @@ PlasmoidItem {
             sourceSize.height: 128
             mipmap: true
 
-            scale: mouseArea.pressed ? 0.85 : 1.0
+            scale: compactRoot.magnifyScaleNow
             Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         }
 
@@ -68,7 +77,7 @@ PlasmoidItem {
             active: mouseArea.containsMouse
             smooth: true
 
-            scale: mouseArea.pressed ? 0.85 : 1.0
+            scale: compactRoot.magnifyScaleNow
             Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         }
 
@@ -144,14 +153,24 @@ PlasmoidItem {
     Kicker.DragHelper    { id: dragHelper    }
     Kicker.ProcessRunner { id: processRunner }
 
-    Component.onCompleted: {
-        rootModel.refresh()
-        _rebuildDashWindow()
-        Plasmoid.activated.connect(function() {
-            // Repara la tecla Meta (Windows)
+    // La tecla Meta llega como Applet::activated(). PlasmoidItem ademas alterna
+    // por su cuenta `expanded`, lo que abriria el popup de fullRepresentation y
+    // le robaria el foco al dashboard, que se auto-oculta al perderlo. Se fuerza
+    // expanded a false para que solo quede la ventana del dashboard.
+    Connections {
+        target: Plasmoid
+        function onActivated() {
+            kicker.expanded = false
             if (dashWindow) {
                 dashWindow.toggle()
             }
-        })
+        }
+    }
+
+    onExpandedChanged: if (expanded) expanded = false
+
+    Component.onCompleted: {
+        rootModel.refresh()
+        _rebuildDashWindow()
     }
 }

@@ -55,3 +55,26 @@ Todos los widgets propios siguen la paleta:
 
 - Widgets propios: GPL-2.0-or-later
 - KdeControlStation: ver `metadata.json` del paquete (Eliver Lara)
+
+## Fuente de verdad y sincronía
+
+**Este repositorio manda.** Lo que se empaqueta en `bookos-widgets` y lo que
+referencia el layout del panel de la ISO son los ids `bookos-*` de aquí.
+
+Las copias en `~/.local/share/plasma/plasmoids/` (con ids `com.bookos.*`,
+`com.mi.widget.bateria`, `KdeControlStation`) son copias de desarrollo para
+probar en caliente. Divergen con facilidad: en julio de 2026, el Launchpad
+instalado llevaba semanas con una función de aumento del icono al pasar el
+cursor que **nunca llegó al repositorio**, así que cualquier build de la ISO la
+habría perdido sin avisar.
+
+Antes de tocar un widget, comprobar en qué dirección está la deriva:
+
+```bash
+diff -rq BookOS-Widgets/<widget> ~/.local/share/plasma/plasmoids/<id-instalado>
+```
+
+Al terminar, copiar el cambio a la copia instalada para poder probarlo, pero
+**sin arrastrar `metadata.json`**: el `Id` es distinto a propósito en cada
+ubicación (`bookos-launchpad` en el repo, `com.bookos.launchpad` instalado) y
+cambiarlo desengancha el widget del layout del panel.

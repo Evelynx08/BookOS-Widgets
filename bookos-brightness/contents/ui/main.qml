@@ -158,7 +158,13 @@ PlasmoidItem {
 
         property real entryOpacity: 0.0
         property real entryScale: 0.96
-        Component.onCompleted: { entryOpacity = 1.0; entryScale = 1.0; root.refresh() }
+        Component.onCompleted: { root.refresh(); revealTimer.start() }
+        // The popup window's height is bound to popupCol.implicitHeight, which
+        // isn't final the instant this Item is constructed — fading in on the
+        // same frame races that resize and can leave an un-composited (black)
+        // sliver where the window just grew, until KWin's shadow/mask catches up.
+        // Waiting a couple of frames lets the size settle before anything is visible.
+        Timer { id: revealTimer; interval: 32; onTriggered: { entryOpacity = 1.0; entryScale = 1.0 } }
         opacity: entryOpacity; scale: entryScale
         Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
         Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }

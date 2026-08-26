@@ -50,6 +50,12 @@
       <default>24.0</default>
     </entry>
 
+    <!-- Wallpaper as launchpad background (blurred) -->
+    <entry name="useWallpaperBg" type="Bool">
+      <label>Use the desktop wallpaper as background</label>
+      <default>false</default>
+    </entry>
+
     <!-- Favorites -->
     <entry name="favoriteApps" type="StringList">
       <label>Favorite apps</label>
@@ -86,6 +92,16 @@
     <entry name="customIcon" type="String">
       <label>Custom button icon</label>
       <default>launch</default>
+    </entry>
+
+    <!-- BookOS: reposo encogido igual que el dock (ver ui/main.qml) -->
+    <entry name="magnifyEnabled" type="Bool">
+      <label>Shrink at rest and grow under the cursor, like the dock</label>
+      <default>true</default>
+    </entry>
+    <entry name="magnifyScale" type="Double">
+      <label>How much the button grows under the cursor (1.0 = disabled)</label>
+      <default>1.2</default>
     </entry>
 
     <!-- Runners -->

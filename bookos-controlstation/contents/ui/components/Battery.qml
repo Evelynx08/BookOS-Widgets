@@ -77,9 +77,9 @@ Lib.Card {
 
             readonly property int  pct: batteryPage.batteryControl.percent
             readonly property bool plugged: batteryPage.batteryControl.pluggedIn
-            readonly property color fillColor: plugged ? "#34c759"
-                                              : pct <= 15 ? "#ff453a"
-                                              : pct <= 30 ? "#ffd60a"
+            readonly property color fillColor: plugged ? Kirigami.Theme.positiveTextColor
+                                              : pct <= 15 ? Kirigami.Theme.negativeTextColor
+                                              : pct <= 30 ? Kirigami.Theme.neutralTextColor
                                               : Kirigami.Theme.textColor
 
             // Outline body (iOS-style horizontal pill)

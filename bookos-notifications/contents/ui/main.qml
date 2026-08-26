@@ -303,7 +303,13 @@ PlasmoidItem {
 
         property real entryOpacity: 0.0
         property real entryScale: 0.96
-        Component.onCompleted: { entryOpacity = 1.0; entryScale = 1.0; root.syncState() }
+        // See bookos-brightness: fading in before the popup window has fully
+        // resized to its Layout height races the resize and can leave a black
+        // un-composited sliver behind. Settle for a couple of frames first —
+        // the notification list's implicitHeight can take a beat longer since
+        // it depends on a Repeater over the current notifications.
+        Component.onCompleted: { root.syncState(); revealTimer.start() }
+        Timer { id: revealTimer; interval: 48; onTriggered: { entryOpacity = 1.0; entryScale = 1.0 } }
         opacity: entryOpacity; scale: entryScale
         Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
         Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }

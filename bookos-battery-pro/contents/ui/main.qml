@@ -65,6 +65,12 @@ PlasmoidItem {
     property int popW:             Plasmoid.configuration.popupWidth     || 300
     property int popH:             Plasmoid.configuration.popupHeight    || 0
 
+    // El panel solo pinta porcentaje y estado de carga; el resto de sondas
+    // alimentan el popup y el tooltip. Se paran mientras nadie mira para no
+    // dejar procesos de shell corriendo en reposo.
+    property bool compactHovered: false
+    readonly property bool liveNeeded: root.expanded || root.compactHovered
+
     Connections {
         target: Plasmoid.configuration
         function onCustomFontChanged()      { root.customFont       = Plasmoid.configuration.customFont || "" }
@@ -170,6 +176,8 @@ PlasmoidItem {
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton
             onClicked: root.expanded = !root.expanded
+            onEntered: root.compactHovered = true
+            onExited:  root.compactHovered = false
 
             RowLayout {
                 id: compactRow
@@ -786,7 +794,9 @@ PlasmoidItem {
             "s=$(cat /sys/class/power_supply/BAT*/status 2>/dev/null | head -n1); echo ${s:-Unknown}; " +
             "o=$(cat /sys/class/power_supply/AC*/online 2>/dev/null | head -n1 || cat /sys/class/power_supply/ADP*/online 2>/dev/null | head -n1); echo ${o:--1}'"
         ]
-        interval: 1500
+        // El panel necesita el porcentaje siempre, pero la batería no cambia
+        // más rápido que eso: 1,5s solo mientras se mira, 30s en reposo.
+        interval: root.liveNeeded ? 1500 : 30000
         onNewData: (sourceName, data) => {
             if (!data["stdout"]) return
             let lines = data["stdout"].trim().split('\n')
@@ -823,7 +833,7 @@ PlasmoidItem {
             "  echo ${cycles:--1}; " +
             "else echo -1; echo -1; echo -1; fi'"
         ]
-        interval: 15000
+        interval: root.liveNeeded ? 15000 : 0
         onNewData: (sourceName, data) => {
             if (!data["stdout"]) return
             let lines = data["stdout"].trim().split('\n')
@@ -849,7 +859,7 @@ PlasmoidItem {
             "elif command -v tlp >/dev/null 2>&1; then echo tlp; " +
             "else echo none; fi'"
         ]
-        interval: 30000
+        interval: root.liveNeeded ? 30000 : 0
         onNewData: (sourceName, data) => {
             if (data["stdout"]) root.powerManager = root.resolveManager(data["stdout"].trim() || "none")
         }
@@ -877,7 +887,7 @@ PlasmoidItem {
         connectedSources: root.powerManager === "tlp"
             ? ["sh -c 'tlp-stat -s 2>/dev/null | grep -i \"power source\" | grep -qi \"battery\" && echo bat || echo ac'"]
             : []
-        interval: 5000
+        interval: root.liveNeeded ? 5000 : 0
         onNewData: (sourceName, data) => { if (data["stdout"]) root.tlpActive = data["stdout"].trim() === "bat" }
     }
 
@@ -885,7 +895,9 @@ PlasmoidItem {
     Plasma5Support.DataSource {
         id: profileSource; engine: "executable"
         connectedSources: root.powerManager === "ppd" ? ["powerprofilesctl get"] : []
-        interval: 4000
+        // powerprofilesctl es un script de Python: cada muestreo arranca un
+        // intérprete entero. Solo mientras el popup o el tooltip están a la vista.
+        interval: root.liveNeeded ? 4000 : 0
         onNewData: (sourceName, data) => {
             if (data["stdout"]) { let p = data["stdout"].trim(); if (p !== "") root.powerProfile = p }
         }
@@ -899,7 +911,7 @@ PlasmoidItem {
             "[ -n \"$bat\" ] && upower -i \"$bat\" 2>/dev/null | " +
             "grep -E \"time to (empty|full)\" | head -n1 | awk -F\": \" \"{print \\$2}\"'"
         ]
-        interval: 30000
+        interval: root.liveNeeded ? 30000 : 0
         onNewData: (sourceName, data) => {
             if (data["stdout"]) {
                 let t = data["stdout"].trim()
@@ -917,7 +929,7 @@ PlasmoidItem {
     Plasma5Support.DataSource {
         id: topSource; engine: "executable"
         connectedSources: ["sh -c 'ps -eo comm,pcpu --sort=-pcpu 2>/dev/null | awk \"NR==2 && \\$2+0 > 8 {printf \\\"%s (%.0f%% CPU)\\\", \\$1, \\$2}\"'"]
-        interval: 10000
+        interval: root.liveNeeded ? 10000 : 0
         onNewData: (sourceName, data) => { root.topProcess = data["stdout"] ? data["stdout"].trim() : "" }
     }
 
@@ -948,7 +960,8 @@ PlasmoidItem {
             "  [ -n \"$friendly\" ] && echo \"${friendly}|${pct:-0}\"; " +
             "done | sort -u'"
         ]
-        interval: 20000
+        // Cada muestreo lanza bluetoothctl + upower por dispositivo emparejado.
+        interval: root.liveNeeded ? 20000 : 0
         onNewData: (sourceName, data) => {
             if (!data["stdout"]) { root.btDevices = []; return }
             let lines = data["stdout"].trim().split('\n').filter(l => l.includes("|"))
@@ -971,7 +984,7 @@ PlasmoidItem {
             // intel_lpmd: Low Power Mode Daemon de Intel (diferente a pstate)
             "if systemctl is-active --quiet intel-lpmd 2>/dev/null || systemctl is-active --quiet intel_lpmd 2>/dev/null; then echo active; else echo inactive; fi'"
         ]
-        interval: 10000
+        interval: root.liveNeeded ? 10000 : 0
         onNewData: (sourceName, data) => {
             if (!data["stdout"]) return
             let lines = data["stdout"].trim().split('\n')

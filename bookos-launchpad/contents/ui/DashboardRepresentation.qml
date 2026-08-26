@@ -7,7 +7,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 import QtQml 2.15
 
 import org.kde.plasma.plasmoid 2.0
@@ -16,6 +16,7 @@ import org.kde.plasma.extras 2.0 as PlasmaExtras
 import org.kde.plasma.components 3.0 as PlasmaComponents3
 import org.kde.kirigami 2.20 as Kirigami
 import org.kde.plasma.private.kicker 0.1 as Kicker
+import org.kde.plasma.plasma5support 2.0 as P5Support
 
 
 Kicker.DashboardWindow {
@@ -25,6 +26,7 @@ Kicker.DashboardWindow {
     property int  cfg_iconSize:   Plasmoid.configuration.iconSize
     property real cfg_blur:       Plasmoid.configuration.blurRadius
     property bool cfg_showLabels: Plasmoid.configuration.showLabels
+    property bool cfg_useWallpaperBg: Plasmoid.configuration.useWallpaperBg
     property string cfg_scrollMode: Plasmoid.configuration.scrollMode || "paged"
     property bool isPaged: cfg_scrollMode === "paged"
 
@@ -40,7 +42,6 @@ Kicker.DashboardWindow {
     // Fixed grid: 6 columns × 5 rows.
     property int cfg_cols: 6
     property int cfg_rows: 5
-    property int appsPerPage: cfg_cols * cfg_rows
 
     // Compute icon size from available area so 6×5 fills nicely.
     property int gridAvailW: Math.max(640, width  * 0.72)
@@ -51,26 +52,31 @@ Kicker.DashboardWindow {
     property int iconPx:     Math.max(48, Math.min(cellW - Kirigami.Units.gridUnit * 3,
                                                     cellH - labelH - Kirigami.Units.gridUnit * 2))
 
-    // palette helpers
+    // palette helpers — tokens from BookOS-HIG/AI-DESIGN-SYSTEM.md §2.1
+    // (accent is the only color allowed to mean "interactive/active")
     property color fgColor: cfg_darkTheme ? Qt.rgba(1, 1, 1, 1)
                                           : Qt.rgba(0.10, 0.10, 0.10, 1)
-    property color bgColor: cfg_darkTheme ? Qt.rgba(0.12, 0.12, 0.13, 0.92)
-                                          : Qt.rgba(0.98, 0.98, 0.98, 0.92)
+    property color bgColor: Qt.rgba(cardColor.r, cardColor.g, cardColor.b, 0.92)
     property color overlayColor: cfg_darkTheme
                                  ? Qt.rgba(0.06, 0.06, 0.08, 1.0)
                                  : Qt.rgba(0.96, 0.96, 0.98, 1.0)
     property color searchBg: cfg_darkTheme
                               ? Qt.rgba(1, 1, 1, 0.12)
                               : Qt.rgba(0, 0, 0, 0.08)
-    property color dotActive: cfg_darkTheme ? Qt.rgba(1, 1, 1, 1)
-                                            : Qt.rgba(0.10, 0.10, 0.10, 1)
+    property color accentColor: cfg_darkTheme ? "#0a84ff" : "#007aff"
+    property color cardColor:   cfg_darkTheme ? "#1c1c1e" : "#ffffff"
+    property color hoverColor:  cfg_darkTheme ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.04)
+    property color borderColor: cfg_darkTheme ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.10)
+    // Page dots: active = accent (this is the one "active" indicator in the
+    // whole dashboard), inactive = faint fg — matches §2.1 selection rule.
+    property color dotActive: accentColor
     property color dotInact:  cfg_darkTheme ? Qt.rgba(1, 1, 1, 0.35)
                                             : Qt.rgba(0, 0, 0, 0.25)
 
     // ── state ────────────────────────────────────────────────────────────
     property bool  searching:    searchField.text.length > 0
     property int   currentPage:  0
-    property int   pageCount:    Math.max(1, Math.ceil(unifiedCount / appsPerPage))
+    property int   pageCount:    Math.max(1, layoutPages.length)
 
     // Folders: array of { name, members: [globalIdx,…] }. Persisted via configuration.
     property var folders: {
@@ -130,6 +136,10 @@ Kicker.DashboardWindow {
 
     onVisibleChanged: {
         if (visible) {
+            // Con el fondo de pantalla activo hace falta su ruta ya al abrir;
+            // si no, se sigue pidiendo solo al abrir una carpeta.
+            if (cfg_useWallpaperBg) ensureWallpaperColors()
+            clearDragState()
             appearAnim.start()
             searchField.clear()
             searchField.forceActiveFocus()
@@ -212,18 +222,26 @@ Kicker.DashboardWindow {
                 var mn = fol.members[j]
                 if (appIdxByName.hasOwnProperty(mn)) {
                     resolved.push({ name: mn, icon: appIconByName[mn], sourceIdx: appIdxByName[mn] })
-                    if (miniIcons.length < 4) miniIcons.push(appIconByName[mn])
+                    // Hasta 9: el tile grande pinta una rejilla de 3×3.
+                    if (miniIcons.length < 9) miniIcons.push(appIconByName[mn])
                 }
             }
             // Skip empty folders (all members uninstalled)
             if (resolved.length === 0) continue
+            // Tamaño del tile: "auto" decide por contenido — con 5 o más apps
+            // no caben en el cuadrado pequeño, así que va a 2×2.
+            var sizeMode = fol.sizeMode || "auto"
+            var big = sizeMode === "2x2"
+                      || (sizeMode === "auto" && resolved.length >= 5)
             out.push({
                 type: "folder",
                 name: fol.name || i18n("Folder"),
                 miniIcons: miniIcons,
                 members: resolved,
                 folderIdx: f2,
-                color: fol.color || "#3F51B5"
+                color: fol.color || "#3F51B5",
+                sizeMode: sizeMode,
+                big: big
             })
         }
         var combined = out.concat(apps)
@@ -248,6 +266,64 @@ Kicker.DashboardWindow {
 
     // Total items count
     property int unifiedCount: unifiedItems.length
+
+    // ── colocación en la rejilla ─────────────────────────────────────────
+    // Las carpetas grandes ocupan 2×2 celdas, así que la rejilla ya no es
+    // uniforme y no vale contar índices: cada elemento recibe su hueco aquí.
+    // Devuelve una lista por página de {idx, col, row, w, h}; los elementos de
+    // 1×1 rellenan los huecos que deja un tile grande, en el orden guardado.
+    function computeLayout(items, cols, rows) {
+        var pages = []
+        if (!items || items.length === 0) return pages
+
+        var occ = null, slots = null
+        function newPage() {
+            occ = []
+            for (var r = 0; r < rows; r++) {
+                var line = []
+                for (var c = 0; c < cols; c++) line.push(false)
+                occ.push(line)
+            }
+            slots = []
+            pages.push(slots)
+        }
+        function fits(col, row, w, h) {
+            if (col + w > cols || row + h > rows) return false
+            for (var r = row; r < row + h; r++)
+                for (var c = col; c < col + w; c++)
+                    if (occ[r][c]) return false
+            return true
+        }
+        function occupy(col, row, w, h) {
+            for (var r = row; r < row + h; r++)
+                for (var c = col; c < col + w; c++) occ[r][c] = true
+        }
+
+        newPage()
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i]
+            var w = (it && it.type === "folder" && it.big) ? 2 : 1
+            var h = w
+            // Una carpeta grande no cabe si la rejilla es de una sola fila/columna.
+            if (w > cols || h > rows) { w = 1; h = 1 }
+
+            var placed = false
+            for (var pass = 0; pass < 2 && !placed; pass++) {
+                for (var row = 0; row < rows && !placed; row++) {
+                    for (var col = 0; col < cols && !placed; col++) {
+                        if (!fits(col, row, w, h)) continue
+                        occupy(col, row, w, h)
+                        slots.push({ idx: i, col: col, row: row, w: w, h: h })
+                        placed = true
+                    }
+                }
+                if (!placed) newPage()   // segunda pasada: página nueva y vacía
+            }
+        }
+        return pages
+    }
+
+    property var layoutPages: computeLayout(unifiedItems, cfg_cols, cfg_rows)
 
     // ── local search: filtra la caché (apps + miembros de folders) ──
     property string searchText: ""
@@ -322,8 +398,72 @@ Kicker.DashboardWindow {
         return hits
     }
 
+    // ── colores sugeridos a partir del fondo de pantalla ──────────────────
+    // Se calcula UNA vez, la primera que se abre una carpeta, no al arrancar:
+    // lanza ImageMagick y no tiene sentido pagarlo si nunca se abre ninguna.
+    property string wallpaperPath: ""
+    property var    wallpaperColors: []
+    property bool   _wallpaperAsked: false
+
+    function ensureWallpaperColors() {
+        if (_wallpaperAsked) return
+        _wallpaperAsked = true
+        wallpaperSrc.connectSource(wallpaperSrc.cmd)
+    }
+
+    // Va en una propiedad, no como hijo suelto: la default property de
+    // DashboardWindow es mainItem (QQuickItem) y no acepta un QtObject.
+    readonly property QtObject _wallpaperSrc: P5Support.DataSource {
+        id: wallpaperSrc
+        engine: "executable"
+        connectedSources: []
+        // Primera línea: ruta del fondo. Resto: hasta 6 colores dominantes.
+        // El fichero de Plasma tiene un bloque por contenedor (uno por
+        // escritorio/pantalla); se toma el primero, que es el escritorio principal.
+        readonly property string cmd:
+            "sh -c '" +
+            "W=$(grep -m1 \"^Image=\" \"$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc\" 2>/dev/null | sed \"s|^Image=file://||\"); " +
+            "[ -f \"$W\" ] || exit 0; " +
+            "echo \"$W\"; " +
+            "command -v magick >/dev/null 2>&1 && M=magick || M=convert; " +
+            "$M \"$W\" -resize 64x64! -colors 8 -format \"%c\" histogram:info: 2>/dev/null " +
+            "| grep -oE \"#[0-9A-Fa-f]{6}\" | head -8'"
+
+        onNewData: function(source, data) {
+            disconnectSource(source)
+            var out = (data["stdout"] || "").trim()
+            if (!out) return
+            var lines = out.split("\n")
+            root.wallpaperPath = lines[0] ? "file://" + lines[0].trim() : ""
+            var cols = []
+            for (var i = 1; i < lines.length; i++) {
+                var c = lines[i].trim()
+                if (!/^#[0-9A-Fa-f]{6}$/.test(c)) continue
+                // Descarta los extremos: un color casi negro o casi blanco no
+                // distingue una carpeta de otra.
+                var r = parseInt(c.substr(1, 2), 16) / 255
+                var g = parseInt(c.substr(3, 2), 16) / 255
+                var b = parseInt(c.substr(5, 2), 16) / 255
+                var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                if (lum < 0.10 || lum > 0.92) continue
+                if (cols.indexOf(c) === -1) cols.push(c)
+                if (cols.length >= 6) break
+            }
+            root.wallpaperColors = cols
+        }
+    }
+
+    // Se llama cada vez que el Launchpad se cierra o se vuelve a abrir
+    // (kicker.onReset). Debe dejarlo como recién abierto: si no, cerrar con la
+    // tecla Súper con una carpeta abierta hacía que al reabrir siguiera abierta,
+    // y lo mismo con una búsqueda a medias.
     function reset() {
         currentPage = 0
+        searchText = ""
+        clearDragState()
+        if (typeof openFolder !== "undefined" && openFolder.visible) {
+            openFolder.visible = false   // sin animación: no se está viendo
+        }
     }
 
     // Drop logic.
@@ -390,7 +530,7 @@ Kicker.DashboardWindow {
         saveOrder()
     }
 
-    function openFolderAt(folderItem) {
+    function openFolderAt(folderItem, originX, originY) {
         if (!folderItem || folderItem.type !== "folder") return
         var appsList = []
         for (var i = 0; i < folderItem.members.length; i++) {
@@ -410,6 +550,13 @@ Kicker.DashboardWindow {
         openFolder.folderIdx   = folderItem.folderIdx
         openFolder.folderColor = folders[folderItem.folderIdx].color || "#3F51B5"
         innerDragFolderIdx     = folderItem.folderIdx
+        // Los colores del fondo de pantalla se calculan la primera vez que se
+        // abre una carpeta, no antes: cuestan un proceso de ImageMagick.
+        ensureWallpaperColors()
+        // Grow out of the clicked icon when we know where it was; otherwise
+        // (e.g. opened from the rename context-menu action) just scale from center.
+        openFolder.originX = (originX !== undefined) ? originX : mainContent.width  / 2
+        openFolder.originY = (originY !== undefined) ? originY : mainContent.height / 2
         openFolder.open()
     }
 
@@ -496,9 +643,38 @@ Kicker.DashboardWindow {
         saveFolders()
     }
 
+    // Tamaño del tile en la rejilla: "auto", "1x1" o "2x2".
+    function setFolderSize(idx, mode) {
+        if (idx < 0 || idx >= folders.length) return
+        var arr = folders.slice()
+        var f = Object.assign({}, arr[idx])
+        f.sizeMode = mode
+        arr[idx] = f
+        folders = arr
+        saveFolders()
+    }
+
 
     // Drop-mode: "merge" (center of cell, ≤45% from center) or "move" (edges)
     property string dragHoverMode: "none"
+
+    // Deja el arrastre como si no hubiera pasado nada. Se llama al terminar, al
+    // cancelar y al abrir el launchpad: un fantasma que se queda pegado en
+    // pantalla no se va solo, y con él la carpeta se ve vacía.
+    function clearDragState() {
+        dragGhost.visible        = false
+        dragGhost.ghostIcon      = ""
+        dragGhost.ghostIsFolder  = false
+        dragGhost.ghostMiniIcons = []
+        dragHoverIdx        = -1
+        dragHoverMode       = "none"
+        dragSourceIdx       = -1
+        innerDragMemberIdx  = -1
+        innerDragAppName    = ""
+        draggingOutOfFolder = false
+        edgeFlipTimer.running = false
+        edgeFlipTimer.flipDir = 0
+    }
 
     function updateDragHover(x, y) {
         if (!gridArea.visible) {
@@ -519,34 +695,43 @@ Kicker.DashboardWindow {
         }
         var p = mainContent.mapToItem(pagesContainer, x, y)
         var localX = p.x - root.currentPage * gridArea.gridW
-        var col = Math.floor(localX / root.cellW)
-        var row = Math.floor(p.y / root.cellH)
-        if (col < 0 || col >= cfg_cols || row < 0 || row >= cfg_rows) {
+        if (localX < 0 || localX >= gridArea.gridW
+            || p.y < 0 || p.y >= gridArea.gridH) {
             root.dragHoverIdx = -1
             root.dragHoverMode = "none"
             return
         }
-        var startIdx = root.currentPage * appsPerPage
-        var idx = startIdx + row * cfg_cols + col
-        if (idx >= unifiedCount) {
-            // empty slot inside grid → move to end of page
+        // Con tiles de 2×2 el índice ya no sale de col + row * cols: hay que
+        // buscar el hueco cuyo rectángulo contiene el cursor.
+        var slots = root.layoutPages[root.currentPage] || []
+        var hit = null
+        for (var i = 0; i < slots.length; i++) {
+            var s = slots[i]
+            var sx = s.col * root.cellW
+            var sy = s.row * root.cellH
+            if (localX >= sx && localX < sx + s.w * root.cellW
+                && p.y >= sy && p.y < sy + s.h * root.cellH) { hit = s; break }
+        }
+        if (!hit) {
+            // hueco vacío dentro de la rejilla → al final de la lista
             root.dragHoverIdx = unifiedCount
             root.dragHoverMode = "move"
             return
         }
-        // Decide merge vs move based on cursor position within cell:
-        // central 50%×50% area → merge, otherwise → move (insert before/after)
-        var cx = (col + 0.5) * root.cellW
-        var cy = (row + 0.5) * root.cellH
-        var dx = localX - cx
-        var dy = p.y - cy
-        var inCenter = Math.abs(dx) < root.cellW * 0.25 && Math.abs(dy) < root.cellH * 0.25
+        // merge vs move: el 50% central del tile (sea 1×1 o 2×2) fusiona,
+        // los bordes insertan antes/después.
+        var tw = hit.w * root.cellW
+        var th = hit.h * root.cellH
+        var cx = hit.col * root.cellW + tw / 2
+        var cy = hit.row * root.cellH + th / 2
+        var inCenter = Math.abs(localX - cx) < tw * 0.25
+                       && Math.abs(p.y - cy) < th * 0.25
         if (inCenter) {
-            root.dragHoverIdx  = idx
+            root.dragHoverIdx  = hit.idx
             root.dragHoverMode = "merge"
         } else {
             // insert: if cursor is on the right half, insert AFTER; else BEFORE
-            var insertAt = (localX > cx) ? idx + 1 : idx
+            var insertAt = (localX > cx) ? hit.idx + 1 : hit.idx
             root.dragHoverIdx  = insertAt
             root.dragHoverMode = "move"
         }
@@ -611,17 +796,49 @@ Kicker.DashboardWindow {
         height:  root.height
         opacity: 0
 
-        // Open animation: fade + gentle zoom-out (Launchpad style)
+        // Solo mientras dura la apertura: al escalar la escena, cada etiqueta
+        // con NativeRendering + relieve se re-rasteriza en CADA fotograma. Con la
+        // capa se rasteriza una vez y lo que se escala es una textura. El
+        // resultado en pantalla es idéntico; el tirón de la apertura no.
+        layer.enabled: appearAnim.running
+
+        // Open animation: fade + gentle zoom-out (Launchpad style).
+        // §2.7 "aparición de página completa": 280ms, sin rebote — un solo
+        // overshoot suave se siente elegante, un muelle que oscila se ve como vibración.
         ParallelAnimation {
             id: appearAnim
-            NumberAnimation { target: mainContent; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
-            NumberAnimation { target: mainContent; property: "scale"; from: 1.06; to: 1; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+            NumberAnimation { target: mainContent; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.OutCubic }
+            NumberAnimation { target: mainContent; property: "scale"; from: 1.05; to: 1; duration: 280; easing.type: Easing.OutQuint }
         }
 
-        // ── wallpaper blur overlay ────────────────────────────────────
+        // ── fondo ─────────────────────────────────────────────────────
+        // El fondo de pantalla, desenfocado, cuando está activado en ajustes.
+        // Se carga a un cuarto de resolución: ya da parte del desenfoque solo,
+        // y evita descodificar una imagen 4K entera para verla borrosa.
+        Image {
+            id: wallpaperBg
+            anchors.fill: parent
+            visible: root.cfg_useWallpaperBg && source !== ""
+            source: root.cfg_useWallpaperBg ? root.wallpaperPath : ""
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: true
+            sourceSize.width: Math.max(320, Math.ceil(root.width / 4))
+            layer.enabled: visible && root.cfg_blur > 0
+            layer.effect: MultiEffect {
+                blurEnabled: true
+                blur: 1.0
+                blurMax: Math.round(Math.max(8, root.cfg_blur))
+            }
+        }
+
+        // Velo. Sin fondo de pantalla es opaco: el aspecto de siempre.
         Rectangle {
             anchors.fill: parent
             color: overlayColor
+            opacity: wallpaperBg.visible
+                     ? (root.cfg_darkTheme ? 0.55 : 0.62)
+                     : 1.0
         }
 
         // ── kicker reset hookup ───────────────────────────────────────
@@ -726,8 +943,11 @@ Kicker.DashboardWindow {
                 anchors.fill: parent
                 radius:        height / 2
                 color:         searchBg
-                border.color:  cfg_darkTheme ? Qt.rgba(1,1,1,0.15) : Qt.rgba(0,0,0,0.10)
-                border.width:  1
+                border.color:  searchField.activeFocus
+                               ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.7)
+                               : root.borderColor
+                border.width:  searchField.activeFocus ? 2 : 1
+                Behavior on border.color { ColorAnimation { duration: 120 } }
             }
 
             Kirigami.Icon {
@@ -867,6 +1087,15 @@ Kicker.DashboardWindow {
                 property bool snapping: false
                 property real dragStartX: 0
                 onMovementStarted: dragStartX = contentX
+
+                // Página que se está viendo AHORA, derivada del desplazamiento real.
+                // currentPage solo se actualiza al terminar el movimiento, así que no
+                // sirve para decidir qué pintar mientras se desliza.
+                readonly property int visualPage:
+                    gridArea.gridW > 0
+                        ? Math.max(0, Math.min(root.pageCount - 1,
+                                   Math.round(contentX / gridArea.gridW)))
+                        : 0
                 onMovementEnded: {
                     if (!root.isPaged) {
                         // continuous: just update currentPage indicator from position
@@ -915,136 +1144,241 @@ Kicker.DashboardWindow {
                     id: pageRep
                     model: root.pageCount
 
-                    Grid {
+                    Loader {
                         id: pageGrid
                         required property int index
                         x:              index * gridArea.gridW
                         width:          gridArea.gridW
                         height:         gridArea.gridH
-                        columns:        cfg_cols
-                        rowSpacing:     0
-                        columnSpacing:  0
-                        // Solo renderiza la página actual y sus vecinas (o todas
-                        // mientras el Flickable se mueve) — el resto no pinta.
-                        visible: pagesFlick.moving || pagesFlick.snapping
-                                 || Math.abs(index - root.currentPage) <= 1
+                        // Solo existe la página que se ve y sus dos vecinas. Antes se
+                        // creaban TODAS al abrir —cada celda con su Kirigami.Icon
+                        // cargando el pixmap— aunque no se llegaran a mirar nunca.
+                        // Siguiendo el desplazamiento real con visualPage la vecina se
+                        // carga en cuanto empieza el gesto, así que no aparece en blanco.
+                        active: Math.abs(index - pagesFlick.visualPage) <= 1
+                        asynchronous: true
+                        visible: status === Loader.Ready
 
-                        property int startIdx: index * appsPerPage
-                        property int countOnPage: Math.min(appsPerPage,
-                                                           Math.max(0, root.unifiedCount - startIdx))
+                        property var slots: root.layoutPages[index] || []
+
+                        sourceComponent: Item {
+                        width:  pageGrid.width
+                        height: pageGrid.height
+
+                        // ── realces del arrastre ─────────────────────────────
+                        // Uno por página, recolocado, en vez de tres Rectangle por
+                        // celda que se quedan invisibles el 99% del tiempo.
+                        property var mergeSlot: {
+                            if (root.dragSourceIdx < 0 || root.dragHoverMode !== "merge") return null
+                            for (var i = 0; i < pageGrid.slots.length; i++) {
+                                var s = pageGrid.slots[i]
+                                if (s.idx === root.dragHoverIdx && s.idx !== root.dragSourceIdx) return s
+                            }
+                            return null
+                        }
+                        // Ranura junto a la que va la línea de inserción, y de qué lado.
+                        property var insertSlot: {
+                            if (root.dragSourceIdx < 0 || root.dragHoverMode !== "move") return null
+                            for (var i = 0; i < pageGrid.slots.length; i++) {
+                                var s = pageGrid.slots[i]
+                                if (s.idx === root.dragHoverIdx && s.idx !== root.dragSourceIdx)
+                                    return { slot: s, after: false }
+                                if (s.idx === root.dragHoverIdx - 1 && s.idx !== root.dragSourceIdx)
+                                    return { slot: s, after: true }
+                            }
+                            return null
+                        }
+
+                        Rectangle {
+                            visible: !!parent.mergeSlot
+                            x:      visible ? parent.mergeSlot.col * root.cellW + Kirigami.Units.smallSpacing : 0
+                            y:      visible ? parent.mergeSlot.row * root.cellH + Kirigami.Units.smallSpacing : 0
+                            width:  visible ? parent.mergeSlot.w * root.cellW - Kirigami.Units.smallSpacing * 2 : 0
+                            height: visible ? parent.mergeSlot.h * root.cellH - Kirigami.Units.smallSpacing * 2 : 0
+                            radius: Kirigami.Units.gridUnit
+                            color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.20)
+                            border.color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.9)
+                            border.width: 2
+                            z: 5
+                        }
+                        Rectangle {
+                            visible: !!parent.insertSlot
+                            width:  3
+                            radius: 2
+                            color:  root.accentColor
+                            height: visible ? parent.insertSlot.slot.h * root.cellH * 0.7 : 0
+                            x: visible
+                               ? (parent.insertSlot.after
+                                  ? (parent.insertSlot.slot.col + parent.insertSlot.slot.w) * root.cellW - width
+                                  : parent.insertSlot.slot.col * root.cellW)
+                               : 0
+                            y: visible
+                               ? parent.insertSlot.slot.row * root.cellH
+                                 + (parent.insertSlot.slot.h * root.cellH - height) / 2
+                               : 0
+                            z: 5
+                        }
 
                         Repeater {
-                            model: pageGrid.countOnPage
+                            model: pageGrid.slots
 
                             delegate: Item {
                                 id: cell
-                                required property int index
-                                property int globalIdx: pageGrid.startIdx + index
+                                required property var modelData
+                                property int globalIdx: modelData.idx
                                 property var item: root.unifiedItems[globalIdx] || null
 
                                 property bool isFolder: item ? item.type === "folder" : false
+                                property bool isBig: isFolder && modelData.w > 1
+                                // Mini-icono bajo el cursor dentro de un tile grande.
+                                property int hoveredMini:
+                                    (isBig && cellHover.hovered && root.dragSourceIdx < 0)
+                                    ? folderTile.miniIconAt(cellHover.point.position.x,
+                                                            cellHover.point.position.y)
+                                    : -1
                                 property string appName: item ? item.name : ""
                                 property var appIcon: item ? item.icon : ""
 
-                                width:  root.cellW
-                                height: root.cellH
-
-                                property bool isMergeTarget: root.dragSourceIdx >= 0
-                                                      && root.dragHoverMode === "merge"
-                                                      && root.dragHoverIdx === globalIdx
-                                                      && root.dragSourceIdx !== globalIdx
-                                property bool isInsertBefore: root.dragSourceIdx >= 0
-                                                      && root.dragHoverMode === "move"
-                                                      && root.dragHoverIdx === globalIdx
-                                                      && root.dragSourceIdx !== globalIdx
-                                property bool isInsertAfter:  root.dragSourceIdx >= 0
-                                                      && root.dragHoverMode === "move"
-                                                      && root.dragHoverIdx === globalIdx + 1
-                                                      && root.dragSourceIdx !== globalIdx
+                                x:      modelData.col * root.cellW
+                                y:      modelData.row * root.cellH
+                                width:  modelData.w * root.cellW
+                                height: modelData.h * root.cellH
 
                                 // hover suave — mismo estilo que la selección en búsqueda
                                 Rectangle {
                                     anchors.fill: parent
                                     anchors.margins: Kirigami.Units.smallSpacing
                                     radius: Kirigami.Units.gridUnit
+                                    // Con el cursor sobre un mini-icono manda el realce
+                                    // pequeño: dos resaltados a la vez confunden.
                                     visible: cellHover.hovered && root.dragSourceIdx < 0
-                                    color: root.cfg_darkTheme
-                                           ? Qt.rgba(1, 1, 1, 0.08)
-                                           : Qt.rgba(0, 0, 0, 0.06)
+                                             && cell.hoveredMini < 0
+                                    color: root.hoverColor
                                 }
-                                HoverHandler { id: cellHover }
-
-                                // merge highlight (centered glow)
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: Kirigami.Units.smallSpacing
-                                    radius: Kirigami.Units.gridUnit
-                                    color: cell.isMergeTarget ? Qt.rgba(1,1,1,0.18) : "transparent"
-                                    border.color: cell.isMergeTarget ? Qt.rgba(1,1,1,0.5) : "transparent"
-                                    border.width: cell.isMergeTarget ? 2 : 0
-                                    visible: cell.isMergeTarget
-                                }
-                                // move insertion line (left edge)
-                                Rectangle {
-                                    visible: cell.isInsertBefore
-                                    anchors.left: parent.left
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width:  3
-                                    height: parent.height * 0.7
-                                    radius: 2
-                                    color:  root.fgColor
-                                }
-                                // move insertion line (right edge)
-                                Rectangle {
-                                    visible: cell.isInsertAfter
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width:  3
-                                    height: parent.height * 0.7
-                                    radius: 2
-                                    color:  root.fgColor
+                                // Con la carpeta abierta el hover debe morir aquí:
+                                // el scrim tapa la rejilla, pero un HoverHandler
+                                // seguía encendiendo el resaltado por debajo.
+                                HoverHandler {
+                                    id: cellHover
+                                    enabled: !openFolder.visible && !root.searching
                                 }
 
                                 Column {
                                     anchors.centerIn: parent
                                     spacing: Kirigami.Units.smallSpacing
+                                    // Hide the static icon once it's actually being dragged —
+                                    // the ghost item takes over. Avoids fighting for the same
+                                    // "pressed" visual state as drag.active toggles.
+                                    opacity: cellMouse.dragMode ? 0 : 1
+                                    Behavior on opacity { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
-                                    // Folder cell: rounded square with 2x2 mini icons + color tint
+                                    // Carpeta: cuadrado redondeado del color de la
+                                    // carpeta con sus mini-iconos dentro (2×2 en el
+                                    // tile pequeño, 3×3 en el grande).
                                     Item {
+                                        id: folderTile
                                         visible: cell.isFolder
-                                        width:  root.iconPx
-                                        height: root.iconPx
+                                        // El pequeño va al 92% del icono: los iconos de
+                                        // app traen padding transparente, así que a
+                                        // igual tamaño el cuadrado se veía más grande.
+                                        // El grande ocupa el bloque menos la etiqueta.
+                                        width:  cell.isBig
+                                                ? Math.min(cell.width, cell.height - root.labelH)
+                                                  - Kirigami.Units.gridUnit
+                                                : Math.round(root.iconPx * 0.92)
+                                        height: width
                                         anchors.horizontalCenter: parent.horizontalCenter
+
+                                        readonly property color folderColor:
+                                            cell.isFolder && cell.item ? cell.item.color : "#3F51B5"
+                                        // El tile cerrado es una versión suave del color:
+                                        // mezclado hacia blanco en tema claro y hacia el
+                                        // fondo oscuro en tema oscuro. La tarjeta abierta
+                                        // sí lleva el color a saco — al abrirla se entra
+                                        // en la carpeta y ahí manda su color.
+                                        readonly property color tileColor: {
+                                            var base = root.cfg_darkTheme
+                                                       ? Qt.rgba(0.11, 0.11, 0.12, 1)
+                                                       : Qt.rgba(1, 1, 1, 1)
+                                            var t = 0.42
+                                            return Qt.rgba(folderColor.r * t + base.r * (1 - t),
+                                                           folderColor.g * t + base.g * (1 - t),
+                                                           folderColor.b * t + base.b * (1 - t), 1)
+                                        }
+                                        readonly property int miniCols: cell.isBig ? 3 : 2
+                                        // Geometría de la rejilla interior, en propiedades
+                                        // porque el impacto del ratón se calcula con ella:
+                                        // los mini-iconos del tile grande se pueden pulsar
+                                        // para abrir su app sin abrir la carpeta.
+                                        readonly property int miniSize:
+                                            Math.round(width * (cell.isBig ? 0.26 : 0.36))
+                                        readonly property int miniSpacing:
+                                            cell.isBig ? Kirigami.Units.smallSpacing : 4
+                                        readonly property int miniTotal:
+                                            miniCols * miniSize + (miniCols - 1) * miniSpacing
+                                        readonly property int miniOrigin: (width - miniTotal) / 2
+                                        readonly property int miniCount:
+                                            cell.isFolder && cell.item
+                                            ? Math.min(cell.isBig ? 9 : 4, cell.item.miniIcons.length)
+                                            : 0
+
+                                        // Índice del mini-icono bajo un punto en
+                                        // coordenadas de la celda, o -1 si el punto cae en
+                                        // el hueco entre iconos o fuera del tile.
+                                        function miniIconAt(cx, cy) {
+                                            if (!cell.isBig) return -1
+                                            var p = mapFromItem(cell, cx, cy)
+                                            var lx = p.x - miniOrigin
+                                            var ly = p.y - miniOrigin
+                                            if (lx < 0 || ly < 0 || lx >= miniTotal || ly >= miniTotal) return -1
+                                            var step = miniSize + miniSpacing
+                                            var col = Math.floor(lx / step)
+                                            var row = Math.floor(ly / step)
+                                            // Dentro del cuadrado del icono, no del hueco
+                                            if (lx - col * step >= miniSize) return -1
+                                            if (ly - row * step >= miniSize) return -1
+                                            var idx = row * miniCols + col
+                                            return idx < miniCount ? idx : -1
+                                        }
 
                                         Rectangle {
                                             anchors.fill: parent
-                                            radius: width * 0.22
-                                            color: root.cfg_darkTheme
-                                                   ? Qt.rgba(1, 1, 1, 0.10)
-                                                   : Qt.rgba(0, 0, 0, 0.06)
-                                            border.color: root.cfg_darkTheme
-                                                          ? Qt.rgba(1, 1, 1, 0.15)
-                                                          : Qt.rgba(0, 0, 0, 0.10)
+                                            radius: width * (cell.isBig ? 0.16 : 0.22)
+                                            // Opaco, no un velo translúcido: sobre el fondo
+                                            // de pantalla un color con alfa cambia de tono
+                                            // según qué haya detrás.
+                                            color: folderTile.tileColor
+                                            border.color: Qt.rgba(folderTile.folderColor.r,
+                                                                  folderTile.folderColor.g,
+                                                                  folderTile.folderColor.b, 0.45)
                                             border.width: 1
-
-                                            // Color tint overlay
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                radius: parent.radius
-                                                color:  cell.isFolder && cell.item ? cell.item.color : "transparent"
-                                                opacity: 0.30
-                                                visible: cell.isFolder
-                                            }
                                         }
+                                        // Realce del mini-icono apuntado: uno solo,
+                                        // recolocado, en vez de un Rectangle por icono.
+                                        Rectangle {
+                                            visible: cell.hoveredMini >= 0
+                                            width:  folderTile.miniSize + 6
+                                            height: width
+                                            radius: width * 0.28
+                                            color:  root.hoverColor
+                                            x: folderTile.miniOrigin - 3
+                                               + (cell.hoveredMini % folderTile.miniCols)
+                                                 * (folderTile.miniSize + folderTile.miniSpacing)
+                                            y: folderTile.miniOrigin - 3
+                                               + Math.floor(cell.hoveredMini / folderTile.miniCols)
+                                                 * (folderTile.miniSize + folderTile.miniSpacing)
+                                        }
+
                                         Grid {
-                                            anchors.centerIn: parent
-                                            columns: 2
-                                            spacing: 4
+                                            x: folderTile.miniOrigin
+                                            y: folderTile.miniOrigin
+                                            columns: folderTile.miniCols
+                                            spacing: folderTile.miniSpacing
                                             Repeater {
-                                                model: cell.isFolder && cell.item ? Math.min(4, cell.item.miniIcons.length) : 0
+                                                model: folderTile.miniCount
                                                 Kirigami.Icon {
                                                     source: cell.item.miniIcons[index] || ""
-                                                    width:  root.iconPx * 0.36
+                                                    width:  folderTile.miniSize
                                                     height: width
                                                     roundToIconSize: false
                                                     smooth: true
@@ -1053,8 +1387,8 @@ Kicker.DashboardWindow {
                                             }
                                         }
 
-                                        scale: cellMouse.pressed && !cellMouse.drag.active ? 0.88 : 1.0
-                                        Behavior on scale { SpringAnimation { spring: 4; damping: 0.28; mass: 0.8 } }
+                                        scale: cellMouse.pressed && !cellMouse.dragMode ? 0.88 : 1.0
+                                        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                                     }
 
                                     // Single app icon
@@ -1068,8 +1402,8 @@ Kicker.DashboardWindow {
                                         roundToIconSize: false
                                         smooth: true
                                         animated: false
-                                        scale: cellMouse.pressed && !cellMouse.drag.active ? 0.88 : 1.0
-                                        Behavior on scale { SpringAnimation { spring: 4; damping: 0.28; mass: 0.8 } }
+                                        scale: cellMouse.pressed && !cellMouse.dragMode ? 0.88 : 1.0
+                                        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                                     }
 
                                     Text {
@@ -1083,7 +1417,7 @@ Kicker.DashboardWindow {
                                         renderType:          Text.NativeRendering
                                         elide:               Text.ElideRight
                                         horizontalAlignment: Text.AlignHCenter
-                                        width:               root.cellW - Kirigami.Units.smallSpacing
+                                        width:               cell.width - Kirigami.Units.smallSpacing
                                     }
                                 }
 
@@ -1098,11 +1432,28 @@ Kicker.DashboardWindow {
                                     drag.target: dragMode ? dragGhost : null
 
                                     property bool dragMode: false
+                                    // Punto donde se apretó y si el cursor se ha movido
+                                    // lo bastante como para que esto sea un arrastre.
+                                    property real pressX: 0
+                                    property real pressY: 0
+                                    property bool moved: false
+                                    // Arrancar a arrastrar es más fácil que confirmar
+                                    // que NO se quería lanzar la app, así que el umbral
+                                    // para mover es mayor que el que cancela el clic.
+                                    readonly property real dragThreshold: Kirigami.Units.gridUnit
+                                    readonly property real clickSlop: Kirigami.Units.gridUnit * 0.45
 
-                                    onPressAndHold: mouse => {
+                                    // onReleased ya ha puesto dragMode a false cuando
+                                    // llega onClicked, así que el arrastre tiene que
+                                    // dejar dicho aparte que ese clic no cuenta: si no,
+                                    // soltar tras arrastrar lanzaba la app.
+                                    property bool suppressClick: false
+
+                                    function beginDrag(mx, my) {
                                         dragMode = true
+                                        suppressClick = true
                                         root.dragSourceIdx = cell.globalIdx
-                                        var p = mapToItem(mainContent, mouse.x, mouse.y)
+                                        var p = mapToItem(mainContent, mx, my)
                                         dragGhost.x = p.x - dragGhost.width / 2
                                         dragGhost.y = p.y - dragGhost.height / 2
                                         if (cell.isFolder && cell.item) {
@@ -1118,7 +1469,27 @@ Kicker.DashboardWindow {
                                         dragGhost.visible = true
                                     }
 
+                                    onPressed: mouse => {
+                                        pressX = mouse.x
+                                        pressY = mouse.y
+                                        moved  = false
+                                        suppressClick = false
+                                    }
+
+                                    onPressAndHold: mouse => beginDrag(mouse.x, mouse.y)
+
                                     onPositionChanged: mouse => {
+                                        var dx = mouse.x - pressX
+                                        var dy = mouse.y - pressY
+                                        var dist = Math.sqrt(dx * dx + dy * dy)
+                                        if (dist > clickSlop) moved = true
+                                        // Arrastrar sin esperar el pulsado largo: mover el
+                                        // icono ya no obliga a acertar con el tiempo, y
+                                        // soltar tras haberlo movido no lanza la app.
+                                        if (!dragMode && pressedButtons === Qt.LeftButton
+                                            && dist > dragThreshold) {
+                                            beginDrag(mouse.x, mouse.y)
+                                        }
                                         if (!dragMode) return
                                         var p = mapToItem(mainContent, mouse.x, mouse.y)
                                         root.updateDragHover(p.x, p.y)
@@ -1157,7 +1528,11 @@ Kicker.DashboardWindow {
                                         }
                                     }
                                     onClicked: mouse => {
-                                        if (dragMode) return
+                                        if (dragMode || suppressClick) return
+                                        // Se movió el dedo/ratón: era un intento de
+                                        // arrastre, no un clic. Lanzar la app aquí es
+                                        // justo lo que pasaba sin querer.
+                                        if (moved && mouse.button === Qt.LeftButton) return
                                         if (mouse.button === Qt.RightButton) {
                                             if (cell.isFolder) {
                                                 folderCtxMenu.folderIdx = cell.item.folderIdx
@@ -1172,7 +1547,19 @@ Kicker.DashboardWindow {
                                         }
                                         if (mouse.button !== Qt.LeftButton) return
                                         if (cell.isFolder) {
-                                            root.openFolderAt(cell.item)
+                                            // En el tile grande, pulsar un mini-icono lanza
+                                            // esa app; el nombre y los huecos abren la carpeta.
+                                            var mi = folderTile.miniIconAt(mouse.x, mouse.y)
+                                            if (mi >= 0 && root.allApps) {
+                                                var mem = cell.item.members[mi]
+                                                if (mem && mem.sourceIdx >= 0) {
+                                                    root.allApps.trigger(mem.sourceIdx, "", null)
+                                                    root.toggle()
+                                                    return
+                                                }
+                                            }
+                                            var origin = cell.mapToItem(mainContent, cell.width / 2, cell.height / 2)
+                                            root.openFolderAt(cell.item, origin.x, origin.y)
                                         } else if (root.allApps && cell.item) {
                                             root.allApps.trigger(cell.item.sourceIdx, "", null)
                                             root.toggle()
@@ -1180,6 +1567,7 @@ Kicker.DashboardWindow {
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -1233,12 +1621,9 @@ Kicker.DashboardWindow {
                                 anchors.margins: Kirigami.Units.smallSpacing
                                 radius: Kirigami.Units.gridUnit
                                 visible: root.searchSelectedIdx === srItem.index
-                                color:  root.cfg_darkTheme
-                                        ? Qt.rgba(1, 1, 1, 0.16)
-                                        : Qt.rgba(0, 0, 0, 0.10)
-                                border.color: root.cfg_darkTheme
-                                              ? Qt.rgba(1, 1, 1, 0.45)
-                                              : Qt.rgba(0, 0, 0, 0.35)
+                                // selected row in a list → accent tint, never solid color (§2.1)
+                                color:  Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.18)
+                                border.color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.7)
                                 border.width: 2
                             }
 
@@ -1256,7 +1641,7 @@ Kicker.DashboardWindow {
                                     smooth: true
                                     animated: false
                                     scale: srTap.pressed ? 0.88 : 1.0
-                                    Behavior on scale { SpringAnimation { spring: 4; damping: 0.28; mass: 0.8 } }
+                                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                                 }
                                 Text {
                                     visible: root.cfg_showLabels
@@ -1323,6 +1708,17 @@ Kicker.DashboardWindow {
             property bool ghostIsFolder: false
             property var  ghostMiniIcons: []
             property string ghostFolderColor: "#3F51B5"
+            readonly property color folderRgb: ghostFolderColor
+            // Mismo cálculo que el tile de la rejilla: el fantasma no puede
+            // cambiar de tono al levantar la carpeta.
+            readonly property color ghostTile: {
+                var base = root.cfg_darkTheme ? Qt.rgba(0.11, 0.11, 0.12, 1)
+                                              : Qt.rgba(1, 1, 1, 1)
+                var t = 0.42
+                return Qt.rgba(folderRgb.r * t + base.r * (1 - t),
+                               folderRgb.g * t + base.g * (1 - t),
+                               folderRgb.b * t + base.b * (1 - t), 1)
+            }
 
             // single app icon mode
             Kirigami.Icon {
@@ -1338,16 +1734,15 @@ Kicker.DashboardWindow {
             Item {
                 anchors.fill: parent
                 visible: dragGhost.ghostIsFolder
+                // Mismo tinte que el tile de la rejilla, para que el fantasma
+                // no cambie de color al levantar la carpeta.
                 Rectangle {
                     anchors.fill: parent
                     radius: width * 0.22
-                    color: Qt.rgba(0.5, 0.5, 0.5, 0.25)
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        color: dragGhost.ghostFolderColor
-                        opacity: 0.35
-                    }
+                    color: dragGhost.ghostTile
+                    border.width: 1
+                    border.color: Qt.rgba(dragGhost.folderRgb.r, dragGhost.folderRgb.g,
+                                          dragGhost.folderRgb.b, 0.45)
                 }
                 Grid {
                     anchors.centerIn: parent
@@ -1379,6 +1774,7 @@ Kicker.DashboardWindow {
             fgColor:     root.fgColor
             bgColor:     root.bgColor
             darkTheme:   root.cfg_darkTheme
+            suggestedColors: root.wallpaperColors
             onAppLaunched:    root.toggle()
             onRenamed:        function(idx, newName)  { root.renameFolder(idx, newName) }
             onColorChanged:   function(idx, newColor) { root.recolorFolder(idx, newColor) }
@@ -1403,7 +1799,11 @@ Kicker.DashboardWindow {
                     root.draggingOutOfFolder = true
                     // Convert inner drag → outer grid drag
                     root.dragSourceIdx = -2   // sentinel: from folder
-                    openFolder.close()
+                    // Se esconde la tarjeta, pero NO se cierra: cerrarla ocultaba
+                    // el MouseArea que tenía el ratón cogido, así que no llegaba
+                    // el soltar — el icono no se movía y el fantasma se quedaba
+                    // pegado en pantalla con la carpeta vacía detrás.
+                    openFolder.draggingOut = true
                 }
                 if (root.draggingOutOfFolder) {
                     root.updateDragHover(x, y)
@@ -1421,6 +1821,8 @@ Kicker.DashboardWindow {
                         if (newSrcIdx >= 0) root.moveItemTo(newSrcIdx, dst)
                     }
                     root.draggingOutOfFolder = false
+                    openFolder.draggingOut   = false
+                    openFolder.visible       = false   // ya no se veía: sin animación
                 } else {
                     // dropped inside card → reorder within folder if hover detected
                     var hoverIdx = openFolder.computeInnerHoverIdx(x, y)
@@ -1431,13 +1833,12 @@ Kicker.DashboardWindow {
                                                  hoverIdx)
                     }
                 }
-                dragGhost.visible   = false
-                dragGhost.ghostIcon = ""
-                root.dragHoverIdx   = -1
-                root.dragHoverMode  = "none"
-                root.dragSourceIdx  = -1
-                root.innerDragMemberIdx = -1
-                root.innerDragAppName   = ""
+                root.clearDragState()
+            }
+            onInnerDragCancel: {
+                root.draggingOutOfFolder = false
+                openFolder.draggingOut   = false
+                root.clearDragState()
             }
         }
 
@@ -1450,7 +1851,7 @@ Kicker.DashboardWindow {
                 var c = Kirigami.Theme.backgroundColor
                 return Qt.rgba(c.r, c.g, c.b, 1.0)
             }
-            radius: 10
+            radius: 12
             border.width: 1
             border.color: (0.299*color.r + 0.587*color.g + 0.114*color.b) < 0.5
                           ? Qt.rgba(1,1,1,0.14) : Qt.rgba(0,0,0,0.12)
@@ -1550,7 +1951,31 @@ Kicker.DashboardWindow {
             id: folderCtxMenu
             property int folderIdx: -1
             property string folderName: ""
+            // Tamaño actual del tile, para marcar la opción elegida.
+            property string sizeMode: folderIdx >= 0 && folderIdx < root.folders.length
+                                      ? (root.folders[folderIdx].sizeMode || "auto")
+                                      : "auto"
             background: CtxMenuBackground {}
+
+            PlasmaComponents3.MenuItem {
+                text: i18n("Size: automatic")
+                checkable: true
+                checked: folderCtxMenu.sizeMode === "auto"
+                onTriggered: root.setFolderSize(folderCtxMenu.folderIdx, "auto")
+            }
+            PlasmaComponents3.MenuItem {
+                text: i18n("Size: small (1×1)")
+                checkable: true
+                checked: folderCtxMenu.sizeMode === "1x1"
+                onTriggered: root.setFolderSize(folderCtxMenu.folderIdx, "1x1")
+            }
+            PlasmaComponents3.MenuItem {
+                text: i18n("Size: large (2×2)")
+                checkable: true
+                checked: folderCtxMenu.sizeMode === "2x2"
+                onTriggered: root.setFolderSize(folderCtxMenu.folderIdx, "2x2")
+            }
+            PlasmaComponents3.MenuSeparator {}
 
             PlasmaComponents3.MenuItem {
                 text: i18n("Rename Folder…")

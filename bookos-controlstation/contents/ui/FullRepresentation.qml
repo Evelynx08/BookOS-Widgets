@@ -120,9 +120,17 @@ Item {
         property var show: activePage
 
         PropertyAnimation { target: animation.hide; property: "shown"; from: animation.hide.shown; to: !animation.hide.shown; duration: 20 }
-        ParallelAnimation {
-            PropertyAnimation { target: fullRep; property: "Layout.preferredWidth"; to: newWidth; duration: 50 }
-            PropertyAnimation { target: fullRep; property: "Layout.preferredHeight"; to: newHeight; duration: 50 }
+        // Resize the actual popup window instantly, not animated. Animating
+        // Layout.preferredWidth/Height drags the real OS window size along
+        // frame-by-frame; KWin's rounded-corner/blur mask lags a frame behind
+        // that growth and briefly shows a black un-composited sliver at the
+        // edge — this is done here, between the two content fades, while
+        // both pages are already invisible, so the jump isn't seen.
+        ScriptAction {
+            script: {
+                fullRep.Layout.preferredWidth  = newWidth
+                fullRep.Layout.preferredHeight = newHeight
+            }
         }
         PropertyAnimation { target: animation.show; property: "shown"; from: animation.show.shown; to: !animation.show.shown; duration: 20}
     }

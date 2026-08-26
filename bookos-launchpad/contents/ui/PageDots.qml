@@ -31,15 +31,20 @@ Item {
                 required property int index
                 property bool isActive: index === indicator.current
 
-                width:  isActive ? 20 : 8
+                // Outer footprint is fixed at the active dot's max width, so the
+                // Row layout never reflows mid-animation (only this dot's own
+                // rectangle resizes inside its already-reserved slot).
+                width:  20
                 height: 8
-                Behavior on width { SpringAnimation { spring: 3.5; damping: 0.3; mass: 0.9 } }
 
                 Rectangle {
-                    anchors.fill: parent
-                    radius:       height / 2
-                    color:        parent.isActive ? indicator.activeColor : indicator.inactiveColor
-                    Behavior on color { ColorAnimation { duration: 200 } }
+                    anchors.centerIn: parent
+                    width:  parent.isActive ? 20 : 8
+                    height: 8
+                    radius: height / 2
+                    color:  parent.isActive ? indicator.activeColor : indicator.inactiveColor
+                    Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: 180 } }
                 }
 
                 TapHandler {

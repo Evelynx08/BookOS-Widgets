@@ -24,15 +24,17 @@ PlasmoidItem {
         var c = Kirigami.Theme.backgroundColor
         return (0.299*c.r + 0.587*c.g + 0.114*c.b) < 0.5
     }
-    // BookOS tokens
-    readonly property color bbBg:    darkTheme ? "#000000" : "#f2f2f7"
-    readonly property color bbCard:  darkTheme ? "#1c1c1e" : "#FFFFFF"
-    readonly property color bbTx:    darkTheme ? "#FFFFFF" : "#000000"
-    readonly property color bbTx2:   "#8e8e93"
-    readonly property color bbDiv:   darkTheme ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.10)
-    readonly property color bbHov:   darkTheme ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06)
-    readonly property color bbAct:   darkTheme ? Qt.rgba(1,1,1,0.16) : Qt.rgba(0,0,0,0.10)
-    readonly property color bbBlue:  darkTheme ? "#0A84FF" : "#007AFF"
+    // BookOS tokens — siguen el esquema de color de Plasma (paleta dinámica
+    // si está activa, o el esquema fijo del usuario si no), en vez de un
+    // hex propio: así no hace falta redibujar nada al cambiar de paleta.
+    readonly property color bbBg:    Kirigami.Theme.backgroundColor
+    readonly property color bbCard:  Kirigami.Theme.alternateBackgroundColor
+    readonly property color bbTx:    Kirigami.Theme.textColor
+    readonly property color bbTx2:   Kirigami.Theme.disabledTextColor
+    readonly property color bbDiv:   Qt.rgba(bbTx.r, bbTx.g, bbTx.b, 0.10)
+    readonly property color bbHov:   Qt.rgba(bbTx.r, bbTx.g, bbTx.b, darkTheme ? 0.10 : 0.06)
+    readonly property color bbAct:   Qt.rgba(bbTx.r, bbTx.g, bbTx.b, darkTheme ? 0.16 : 0.10)
+    readonly property color bbBlue:  Kirigami.Theme.highlightColor
     readonly property color bbGreen: darkTheme ? "#30D158" : "#34C759"
     readonly property color bbRed:   darkTheme ? "#FF453A" : "#FF3B30"
     readonly property color bbYellow:darkTheme ? "#FFD60A" : "#FFCC00"
@@ -174,7 +176,9 @@ PlasmoidItem {
         id: chargeLimitSrc
         engine: "executable"
         connectedSources: ["sh -c 'cat /sys/class/power_supply/BAT*/charge_control_end_threshold 2>/dev/null | head -1'"]
-        interval: 30000
+        // El umbral de carga es un ajuste, no una medida: cambia cuando el
+        // usuario lo toca, no cada 30s.
+        interval: 300000
         onNewData: (src, data) => {
             var v = parseInt(((data["stdout"] || "") + "").trim())
             if (!isNaN(v) && v > 0 && v <= 100) bookBar.chargeLimit = v
@@ -247,7 +251,9 @@ PlasmoidItem {
     P5Support.DataSource {
         engine: "executable"
         connectedSources: ["sh -c 'D=$(pactl get-default-sink 2>/dev/null); pactl list sinks 2>/dev/null | awk -v d=\"$D\" \"/^Sink/{n=0} \\$0 ~ \\\"Name: \\\"d {n=1} n && /Description:/{sub(/.*Description: /,\\\"\\\"); print; exit}\"'"]
-        interval: 10000
+        // El nombre de la salida solo se pinta dentro del panel de música
+        // expandido, así que no hay motivo para sondear pactl con la barra plegada.
+        interval: bookBar.expanded ? 10000 : 0
         onNewData: (src, data) => {
             var s = (data["stdout"] || "").trim()
             if (s !== "") bookBar.audioOut = s

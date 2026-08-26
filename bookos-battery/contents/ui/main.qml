@@ -73,15 +73,16 @@ PlasmoidItem {
         var b = Kirigami.Theme.backgroundColor
         return (b.r + b.g + b.b) / 3.0 < 0.5
     }
-    // BookOS tokens: bg, card, tx, tx2, div, brd, hov, blue
-    readonly property color bg:    isDarkMode ? Qt.color("#000000") : Qt.color("#FFFFFF")
-    readonly property color card:  isDarkMode ? Qt.color("#1c1c1e") : Qt.color("#FFFFFF")
-    readonly property color txt:   isDarkMode ? Qt.color("#FFFFFF") : Qt.color("#000000")
-    readonly property color txt2:  Qt.color("#8e8e93")
-    readonly property color divCol: isDarkMode ? Qt.rgba(1,1,1,0.08) : Qt.rgba(0,0,0,0.08)
-    readonly property color brdCol: isDarkMode ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.10)
-    readonly property color hovCol: isDarkMode ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0,0,0,0.04)
-    readonly property color hi:    isDarkMode ? Qt.color("#0A84FF") : Qt.color("#007AFF")
+    // BookOS tokens: bg, card, tx, tx2, div, brd, hov, blue — del esquema de
+    // color de Plasma (paleta dinámica si está activa) en vez de hex propio.
+    readonly property color bg:    Kirigami.Theme.backgroundColor
+    readonly property color card:  Kirigami.Theme.alternateBackgroundColor
+    readonly property color txt:   Kirigami.Theme.textColor
+    readonly property color txt2:  Kirigami.Theme.disabledTextColor
+    readonly property color divCol: Qt.rgba(txt.r, txt.g, txt.b, 0.08)
+    readonly property color brdCol: Qt.rgba(txt.r, txt.g, txt.b, 0.10)
+    readonly property color hovCol: Qt.rgba(txt.r, txt.g, txt.b, isDarkMode ? 0.06 : 0.04)
+    readonly property color hi:    Kirigami.Theme.highlightColor
 
     // BookOS palette: dark vs light variants
     readonly property color colCharging:    Qt.color(Plasmoid.configuration.chargingColor    || (isDarkMode ? "#30D158" : "#34C759"))
@@ -356,6 +357,8 @@ PlasmoidItem {
         MouseArea {
             anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.LeftButton
             onClicked: root.expanded = !root.expanded
+            onEntered: root.compactHovered = true
+            onExited:  root.compactHovered = false
             RowLayout {
                 id: compactRow; anchors.centerIn: parent; spacing: 5
                 anchors.verticalCenterOffset: (root.animBounce && root.isCharging) ? root.bounceY : 0
@@ -810,6 +813,10 @@ PlasmoidItem {
     // DATA SOURCES — detección rápida
     // ═════════════════════════════════════════════════════════════════════
     readonly property bool popupOpen: root.expanded
+    // El tooltip del panel muestra los datos de detalle, así que las sondas
+    // lentas también deben despertar al pasar el ratón, no solo al abrir.
+    property bool compactHovered: false
+    readonly property bool liveNeeded: root.popupOpen || root.compactHovered
 
     // Status cada 1.5s
     Plasma5Support.DataSource {
@@ -820,7 +827,9 @@ PlasmoidItem {
             "o=$(cat /sys/class/power_supply/AC*/online 2>/dev/null | head -n1 || echo -1); " +
             "echo ${c:--1}; echo ${s:-Unknown}; echo ${o:--1}'"
         ]
-        interval: 1500
+        // El panel y el aviso de batería baja dependen de esta fuente, así que
+        // nunca se para; solo baja a 30s cuando nadie está mirando.
+        interval: root.liveNeeded ? 1500 : 30000
         onNewData: (sourceName, data) => {
             if (!data["stdout"]) return
             var lines = data["stdout"].trim().split('\n')
@@ -858,8 +867,9 @@ PlasmoidItem {
             "thresh=$(cat \"$bat/charge_control_end_threshold\" 2>/dev/null || echo 100); " +
             "echo \"$temp|$pnow|$enow|$efull|$edesign|$cycles|$thresh\"'"
         ]
-        // popup shows live detail; in panel a slower cadence is plenty
-        interval: root.popupOpen ? 3000 : 10000
+        // popup shows live detail; in panel a slower cadence is plenty.
+        // Sigue viva en reposo porque alimenta isChargeLimited, pero a 60s.
+        interval: root.liveNeeded ? 3000 : 60000
         onNewData: (sourceName, data) => {
             if (!data["stdout"]) return
             var parts = data["stdout"].trim().split("|")
@@ -903,14 +913,15 @@ PlasmoidItem {
     Plasma5Support.DataSource {
         id: managerDetectSource; engine: "executable"
         connectedSources: ["sh -c 'if systemctl is-active --quiet power-profiles-daemon 2>/dev/null; then echo ppd; elif systemctl is-active --quiet tlp 2>/dev/null || command -v tlp >/dev/null; then echo tlp; else echo none; fi'"]
-        interval: 30000
+        interval: root.liveNeeded ? 30000 : 0
         onNewData: (sourceName, data) => { if (data["stdout"]) root.powerManager = root.resolveManager(data["stdout"].trim() || "none") }
     }
 
     Plasma5Support.DataSource {
         id: profileSource; engine: "executable"
         connectedSources: root.powerManager === "ppd" ? ["powerprofilesctl get"] : []
-        interval: root.popupOpen ? 4000 : 15000
+        // powerprofilesctl arranca un intérprete de Python en cada muestreo.
+        interval: root.liveNeeded ? 4000 : 0
         onNewData: (sourceName, data) => { if (data["stdout"]) { var p = data["stdout"].trim(); if (p !== "") root.powerProfile = p } }
     }
 
